@@ -457,7 +457,11 @@ exports.getStats = (req, res) => {
  */
 exports.changePassword = (req, res) => {
   const { oldPassword, newPassword } = req.body;
-  const adminId = req.admin.id; // 从 JWT 中获取
+  const adminId = req.user && req.user.id; // 从 JWT 中获取（authMiddleware 挂在 req.user）
+
+  if (!adminId) {
+    return res.status(401).json({ error: '认证信息无效，请重新登录' });
+  }
 
   if (!oldPassword || !newPassword) {
     return res.status(400).json({ error: '请提供旧密码和新密码' });
