@@ -203,6 +203,16 @@ async function initDatabase() {
   console.log('Database initialized successfully!');
 }
 
+// 事务嵌套深度：>0 时挂起落盘。
+// sql.js 的 db.export() 会重置事务状态，若事务中途落盘会导致
+// COMMIT 时报 "no transaction is active"，故必须延后到事务结束。
+let txDepth = 0;
+
+function saveDbUnlessInTransaction() {
+  if (txDepth > 0) return;
+  saveDb();
+}
+
 // 创建一个兼容 better-sqlite3 API 的包装器
 const dbWrapper = {
   prepare: (sql) => {
@@ -235,7 +245,7 @@ const dbWrapper = {
         stmt.bind(params);
         stmt.step();
         stmt.free();
-        saveDb();
+        saveDbUnlessInTransaction();
         return { changes: db.getRowsModified(), lastInsertRowid: null };
       }
     };
@@ -243,7 +253,40 @@ const dbWrapper = {
   exec: (sql) => {
     if (!db) throw new Error('Database not initialized');
     db.run(sql);
-    saveDb();
+    saveDbUnlessInTransaction();
+  },
+  // 兼容 better-sqlite3 的 transaction API：
+  // 返回一个包装函数，执行期间出错则回滚，成功后统一落盘
+  transaction: (fn) => {
+    return (...args) => {
+      if (!db) throw new Error('Database not initialized');
+
+      const isOutermost = txDepth === 0;
+      if (isOutermost) {
+        db.run('BEGIN TRANSACTION');
+      }
+      txDepth++;
+
+      try {
+        const result = fn(...args);
+        txDepth--;
+        if (isOutermost) {
+          db.run('COMMIT');
+          saveDb();
+        }
+        return result;
+      } catch (error) {
+        txDepth--;
+        if (isOutermost) {
+          try {
+            db.run('ROLLBACK');
+          } catch (rollbackError) {
+            console.error('回滚失败:', rollbackError);
+          }
+        }
+        throw error;
+      }
+    };
   }
 };
 

@@ -3,6 +3,80 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const csv = require('csv-parser');
 const fs = require('fs');
+const iconv = require('iconv-lite');
+
+/**
+ * 解析金额字符串，兼容 Excel 导出的常见格式：
+ *   "￥1,109.90" / "$1,109.90" / "1,109.90" / "1109.9" / "（空）"
+ * 会剥离货币符号、千分位逗号和空白（含全角空格），无法解析时返回 0。
+ */
+function parseAmount(value) {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === 'number') return isFinite(value) ? value : 0;
+
+  // 只保留数字、小数点和负号，其余（货币符号、千分位逗号、空格）一律剥离
+  const cleaned = String(value).replace(/[^\d.-]/g, '');
+  if (cleaned === '' || cleaned === '-' || cleaned === '.') return 0;
+
+  const num = parseFloat(cleaned);
+  return isFinite(num) ? num : 0;
+}
+
+/**
+ * 按候选名依次取字段，容忍表头大小写、空格及 BOM 残留差异
+ */
+function pickField(row, ...names) {
+  for (const name of names) {
+    if (row[name] !== undefined && String(row[name]).trim() !== '') {
+      return String(row[name]).trim();
+    }
+  }
+  // 回退：规范化后再匹配一次（去 BOM、空格、下划线，忽略大小写）
+  const normalize = (s) => s.replace(/^﻿/, '').replace(/[\s_]/g, '').toLowerCase();
+  for (const name of names) {
+    const target = normalize(name);
+    for (const key of Object.keys(row)) {
+      if (normalize(key) === target && String(row[key]).trim() !== '') {
+        return String(row[key]).trim();
+      }
+    }
+  }
+  return '';
+}
+
+/**
+ * 创建 CSV 解析流，自动处理编码：
+ * UTF-8（含 BOM）直接读取；非法 UTF-8 序列（多为 Excel 导出的 GBK）转码后再解析。
+ */
+function createCsvStream(filePath) {
+  const buffer = fs.readFileSync(filePath);
+
+  // 含 U+FFFD 替换字符说明不是合法 UTF-8，按 GBK 再解一次
+  let text = buffer.toString('utf8');
+  if (text.includes('�')) {
+    text = iconv.decode(buffer, 'gbk');
+  }
+  // 去掉 BOM，避免首个表头变成 "﻿email"
+  text = text.replace(/^﻿/, '');
+
+  const stream = csv();
+  stream.write(text);
+  stream.end();
+  return stream;
+}
+
+/**
+ * 删除上传的临时文件，失败仅记录不抛出
+ */
+function cleanupTempFile(filePath) {
+  try {
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    console.error('清理临时文件失败:', error);
+  }
+}
 
 /**
  * 管理员登录
@@ -254,43 +328,65 @@ exports.importUsers = (req, res) => {
 
   const users = [];
   const errors = [];
+  let responded = false;
 
-  fs.createReadStream(req.file.path)
-    .pipe(csv())
+  // 统一的失败响应，确保临时文件被清理且只响应一次
+  const fail = (message, status = 500) => {
+    if (responded) return;
+    responded = true;
+    cleanupTempFile(req.file.path);
+    res.status(status).json({ error: message });
+  };
+
+  createCsvStream(req.file.path)
     .on('data', (row) => {
+      const email = pickField(row, 'email');
+      const amountRaw = pickField(row, 'total_recharge', 'recharge_amount', 'amount');
+
       // 期望 CSV 格式：email,total_recharge
-      if (row.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+      if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         users.push({
-          email: row.email,
-          total_recharge: parseFloat(row.total_recharge) || 0
+          email,
+          total_recharge: parseAmount(amountRaw)
         });
       } else {
-        errors.push(`无效邮箱: ${row.email}`);
+        errors.push(`无效邮箱: ${email || '(空)'}`);
       }
     })
     .on('end', () => {
+      if (responded) return;
+
+      if (users.length === 0) {
+        return fail(
+          'CSV 中没有可导入的有效数据，请确认表头包含 email 列' +
+          (errors.length > 0 ? `（${errors.slice(0, 3).join('; ')}）` : ''),
+          400
+        );
+      }
+
       let successCount = 0;
 
-      const insertStmt = db.prepare(`
-        INSERT OR REPLACE INTO users (email, total_recharge)
-        VALUES (?, ?)
-      `);
+      try {
+        const insertStmt = db.prepare(`
+          INSERT OR REPLACE INTO users (email, total_recharge)
+          VALUES (?, ?)
+        `);
 
-      const insertMany = db.transaction((users) => {
-        for (const user of users) {
-          try {
+        const insertMany = db.transaction((list) => {
+          for (const user of list) {
             insertStmt.run(user.email, user.total_recharge);
             successCount++;
-          } catch (error) {
-            errors.push(`导入失败: ${user.email}`);
           }
-        }
-      });
+        });
 
-      insertMany(users);
+        insertMany(users);
+      } catch (error) {
+        console.error('导入用户失败:', error);
+        return fail(`导入失败: ${error.message}`);
+      }
 
-      // 删除临时文件
-      fs.unlinkSync(req.file.path);
+      responded = true;
+      cleanupTempFile(req.file.path);
 
       res.json({
         success: true,
@@ -300,8 +396,8 @@ exports.importUsers = (req, res) => {
       });
     })
     .on('error', (error) => {
-      console.error('导入失败:', error);
-      res.status(500).json({ error: '导入失败' });
+      console.error('解析 CSV 失败:', error);
+      fail(`CSV 解析失败: ${error.message}`);
     });
 };
 
@@ -359,43 +455,62 @@ exports.importCodes = (req, res) => {
 
   const codes = [];
   const errors = [];
+  let responded = false;
 
-  fs.createReadStream(req.file.path)
-    .pipe(csv())
+  const fail = (message, status = 500) => {
+    if (responded) return;
+    responded = true;
+    cleanupTempFile(req.file.path);
+    res.status(status).json({ error: message });
+  };
+
+  createCsvStream(req.file.path)
     .on('data', (row) => {
       // 期望 CSV 格式：code,prize_id
-      if (row.code && row.prize_id) {
-        codes.push({
-          code: row.code,
-          prize_id: parseInt(row.prize_id)
-        });
+      const code = pickField(row, 'code');
+      const prizeIdRaw = pickField(row, 'prize_id', 'prizeId');
+      const prizeId = parseInt(prizeIdRaw, 10);
+
+      if (code && Number.isInteger(prizeId)) {
+        codes.push({ code, prize_id: prizeId });
       } else {
         errors.push(`无效数据: ${JSON.stringify(row)}`);
       }
     })
     .on('end', () => {
+      if (responded) return;
+
+      if (codes.length === 0) {
+        return fail(
+          'CSV 中没有可导入的有效数据，请确认表头包含 code 与 prize_id 列' +
+          (errors.length > 0 ? `（${errors.slice(0, 3).join('; ')}）` : ''),
+          400
+        );
+      }
+
       let successCount = 0;
 
-      const insertStmt = db.prepare(`
-        INSERT OR IGNORE INTO redemption_codes (code, prize_id)
-        VALUES (?, ?)
-      `);
+      try {
+        const insertStmt = db.prepare(`
+          INSERT OR IGNORE INTO redemption_codes (code, prize_id)
+          VALUES (?, ?)
+        `);
 
-      const insertMany = db.transaction((codes) => {
-        for (const item of codes) {
-          try {
+        const insertMany = db.transaction((list) => {
+          for (const item of list) {
             const result = insertStmt.run(item.code, item.prize_id);
             if (result.changes > 0) successCount++;
-          } catch (error) {
-            errors.push(`导入失败: ${item.code}`);
           }
-        }
-      });
+        });
 
-      insertMany(codes);
+        insertMany(codes);
+      } catch (error) {
+        console.error('导入兑换码失败:', error);
+        return fail(`导入失败: ${error.message}`);
+      }
 
-      // 删除临时文件
-      fs.unlinkSync(req.file.path);
+      responded = true;
+      cleanupTempFile(req.file.path);
 
       res.json({
         success: true,
@@ -405,8 +520,8 @@ exports.importCodes = (req, res) => {
       });
     })
     .on('error', (error) => {
-      console.error('导入失败:', error);
-      res.status(500).json({ error: '导入失败' });
+      console.error('解析 CSV 失败:', error);
+      fail(`CSV 解析失败: ${error.message}`);
     });
 };
 
