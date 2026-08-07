@@ -41,7 +41,9 @@ export const authApi = {
     axios.post(`${API_BASE_URL}/auth/login`, { username, password }),
   logout: () => {
     localStorage.removeItem('admin_token');
-  }
+  },
+  changePassword: (oldPassword, newPassword) =>
+    adminApi.put('/admin/change-password', { oldPassword, newPassword })
 };
 
 // 配置管理

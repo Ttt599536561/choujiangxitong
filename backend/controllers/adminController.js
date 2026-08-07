@@ -451,3 +451,39 @@ exports.getStats = (req, res) => {
     res.status(500).json({ error: '获取统计数据失败' });
   }
 };
+
+/**
+ * 修改管理员密码
+ */
+exports.changePassword = (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  const adminId = req.admin.id; // 从 JWT 中获取
+
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: '请提供旧密码和新密码' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: '新密码长度至少为6位' });
+  }
+
+  try {
+    // 验证旧密码
+    const admin = db.prepare('SELECT * FROM admins WHERE id = ?').get(adminId);
+
+    if (!admin || !bcrypt.compareSync(oldPassword, admin.password)) {
+      return res.status(401).json({ error: '旧密码错误' });
+    }
+
+    // 加密新密码
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+
+    // 更新密码
+    db.prepare('UPDATE admins SET password = ? WHERE id = ?').run(hashedPassword, adminId);
+
+    res.json({ success: true, message: '密码修改成功' });
+  } catch (error) {
+    console.error('修改密码失败:', error);
+    res.status(500).json({ error: '修改密码失败' });
+  }
+};

@@ -38,4 +38,7 @@ router.get('/records', adminController.getLotteryRecords);
 // 统计数据
 router.get('/stats', adminController.getStats);
 
+// 修改密码
+router.put('/change-password', adminController.changePassword);
+
 module.exports = router;

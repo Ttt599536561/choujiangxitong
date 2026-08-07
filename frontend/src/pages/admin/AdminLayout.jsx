@@ -17,7 +17,8 @@ const AdminLayout = ({ children }) => {
     { path: '/admin/prizes', label: '奖项', icon: '🏆' },
     { path: '/admin/users', label: '用户', icon: '👥' },
     { path: '/admin/codes', label: '兑换码', icon: '🎫' },
-    { path: '/admin/records', label: '记录', icon: '📝' }
+    { path: '/admin/records', label: '记录', icon: '📝' },
+    { path: '/admin/change-password', label: '修改密码', icon: '🔒' }
   ];
 
   return (
