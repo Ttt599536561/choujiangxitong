@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from './AdminLayout';
 import { prizeApi } from '../../services/adminApi';
+import { useCurrencySymbol } from '../../hooks/useCurrencySymbol';
 
 const PrizePage = () => {
+  const currencySymbol = useCurrencySymbol();
   const [prizes, setPrizes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -213,7 +215,7 @@ const PrizePage = () => {
                     {prize.prize_name}
                   </td>
                   <td style={{ padding: '1rem', color: '#E9A568', fontWeight: '600' }}>
-                    {prize.is_thanks ? '-' : `¥${prize.prize_amount}`}
+                    {prize.is_thanks ? '-' : `${currencySymbol}${prize.prize_amount}`}
                   </td>
                   <td style={{ padding: '1rem', color: 'var(--text-primary)' }}>
                     {prize.win_rate}%
@@ -413,7 +415,7 @@ const PrizePage = () => {
                       color: 'var(--text-primary)',
                       marginBottom: '0.5rem'
                     }}>
-                      奖金金额（元）*
+                      奖金金额（{currencySymbol}）*
                     </label>
                     <input
                       type="number"

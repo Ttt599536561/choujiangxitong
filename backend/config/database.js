@@ -150,6 +150,7 @@ async function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       icon TEXT NOT NULL DEFAULT '🎟️',
       label TEXT NOT NULL,
+      badge_text TEXT DEFAULT '',
       sort_order INTEGER DEFAULT 0,
       enabled INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -167,6 +168,19 @@ async function initDatabase() {
     }
   } catch (error) {
     console.error('迁移 currency_symbol 失败:', error);
+  }
+
+  // 迁移：为早于 badge_text 字段创建的旧库补列
+  // 默认空字符串 = 不显示标签，标签文字必须由后台显式配置
+  try {
+    const cols = db.exec("PRAGMA table_info(slot_decoys)");
+    const colNames = cols.length > 0 ? cols[0].values.map(r => r[1]) : [];
+    if (colNames.length > 0 && !colNames.includes('badge_text')) {
+      db.run("ALTER TABLE slot_decoys ADD COLUMN badge_text TEXT DEFAULT ''");
+      console.log('✓ Migrated: added badge_text column');
+    }
+  } catch (error) {
+    console.error('迁移 badge_text 失败:', error);
   }
 
   // 插入默认配置

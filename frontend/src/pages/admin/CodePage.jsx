@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from './AdminLayout';
 import { codeApi, prizeApi } from '../../services/adminApi';
+import { useCurrencySymbol } from '../../hooks/useCurrencySymbol';
 
 const CodePage = () => {
+  const currencySymbol = useCurrencySymbol();
   const [codes, setCodes] = useState([]);
   const [prizes, setPrizes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +36,23 @@ const CodePage = () => {
   const parsedCodes = parseCodes(formData.codes);
   const nonEmptyLines = formData.codes.split(/[\r\n]+/).filter((l) => l.trim()).length;
   const duplicateLines = nonEmptyLines - parsedCodes.length;
+
+  // 表头吸顶样式
+  // 1) sticky 必须挂在 th 上：table 用了 border-collapse: collapse，
+  //    挂在 thead 上时 Chrome 不会绘制它的背景，滚动的行会直接盖住表头
+  // 2) 背景必须不透明：原来的 rgba(...,0.1) 半透明，行会从表头底下透出来
+  //    这里用同样的金色蒙层叠在不透明底色上，观感不变但能挡住内容
+  const thStyle = {
+    position: 'sticky',
+    top: 0,
+    zIndex: 2,
+    padding: '1rem',
+    textAlign: 'left',
+    color: 'var(--text-primary)',
+    fontWeight: '600',
+    background: 'linear-gradient(rgba(233, 165, 104, 0.1), rgba(233, 165, 104, 0.1)), #161D2B',
+    boxShadow: 'inset 0 -1px 0 rgba(233, 165, 104, 0.3), 0 4px 12px rgba(0, 0, 0, 0.35)'
+  };
 
   useEffect(() => {
     loadData();
@@ -356,15 +375,15 @@ const CodePage = () => {
         }}>
           <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ position: 'sticky', top: 0, background: 'rgba(233, 165, 104, 0.1)', zIndex: 1 }}>
+              <thead>
                 <tr>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>ID</th>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>兑换码</th>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>对应奖项</th>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>奖金</th>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>状态</th>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>发放给</th>
-                  <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>发放时间</th>
+                  <th style={thStyle}>ID</th>
+                  <th style={thStyle}>兑换码</th>
+                  <th style={thStyle}>对应奖项</th>
+                  <th style={thStyle}>奖金</th>
+                  <th style={thStyle}>状态</th>
+                  <th style={thStyle}>发放给</th>
+                  <th style={thStyle}>发放时间</th>
                 </tr>
               </thead>
               <tbody>
@@ -392,7 +411,7 @@ const CodePage = () => {
                       {code.prize_name}
                     </td>
                     <td style={{ padding: '1rem', color: '#E9A568', fontWeight: '600' }}>
-                      ¥{code.prize_amount}
+                      {currencySymbol}{code.prize_amount}
                     </td>
                     <td style={{ padding: '1rem' }}>
                       <span style={{
@@ -553,7 +572,7 @@ const CodePage = () => {
                   >
                     {prizes.map((prize) => (
                       <option key={prize.id} value={prize.id}>
-                        {prize.prize_name} (¥{prize.prize_amount})
+                        {prize.prize_name} ({currencySymbol}{prize.prize_amount})
                       </option>
                     ))}
                   </select>

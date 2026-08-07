@@ -7,7 +7,9 @@ const DecoyPage = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingDecoy, setEditingDecoy] = useState(null);
-  const [formData, setFormData] = useState({ icon: '', label: '', sort_order: 0, enabled: true });
+  // show_badge 只是界面上的开关，存到后端的永远只有 badge_text：
+  // badge_text 为空就是不显示角标，后端不需要额外的布尔字段
+  const [formData, setFormData] = useState({ icon: '', label: '', show_badge: false, badge_text: '', sort_order: 0, enabled: true });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -29,16 +31,19 @@ const DecoyPage = () => {
 
   const openAdd = () => {
     setEditingDecoy(null);
-    setFormData({ icon: '🎟️', label: '', sort_order: decoys.length + 1, enabled: true });
+    setFormData({ icon: '🎟️', label: '', show_badge: false, badge_text: '', sort_order: decoys.length + 1, enabled: true });
     setError('');
     setShowModal(true);
   };
 
   const openEdit = (decoy) => {
+    const badgeText = (decoy.badge_text || '').trim();
     setEditingDecoy(decoy);
     setFormData({
       icon: decoy.icon,
       label: decoy.label,
+      show_badge: badgeText !== '',
+      badge_text: badgeText,
       sort_order: decoy.sort_order,
       enabled: decoy.enabled === 1 || decoy.enabled === true
     });
@@ -49,15 +54,24 @@ const DecoyPage = () => {
   const handleSave = async () => {
     if (!formData.icon.trim()) { setError('请输入图标'); return; }
     if (!formData.label.trim()) { setError('请输入文字'); return; }
+    if (formData.show_badge && !formData.badge_text.trim()) { setError('请输入角标文字，或关掉角标开关'); return; }
 
     setSaving(true);
     setError('');
+    // 开关关掉就提交空字符串，前台据此不渲染角标
+    const payload = {
+      icon: formData.icon,
+      label: formData.label,
+      badge_text: formData.show_badge ? formData.badge_text.trim() : '',
+      sort_order: formData.sort_order,
+      enabled: formData.enabled
+    };
     try {
       if (editingDecoy) {
-        await decoyApi.updateDecoy(editingDecoy.id, formData);
+        await decoyApi.updateDecoy(editingDecoy.id, payload);
         setSuccess('修改成功');
       } else {
-        await decoyApi.addDecoy(formData);
+        await decoyApi.addDecoy(payload);
         setSuccess('添加成功');
       }
       setShowModal(false);
@@ -161,7 +175,7 @@ const DecoyPage = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(233,165,104,0.2)' }}>
-                  {['图标', '文字', '排序', '状态', '操作'].map(h => (
+                  {['图标', '文字', '角标', '排序', '状态', '操作'].map(h => (
                     <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#E9A568',
                       fontSize: '0.85rem', fontWeight: '600' }}>{h}</th>
                   ))}
@@ -173,6 +187,22 @@ const DecoyPage = () => {
                     <td style={{ padding: '0.875rem 1rem', fontSize: '1.75rem' }}>{decoy.icon}</td>
                     <td style={{ padding: '0.875rem 1rem', color: 'var(--text-primary)', fontWeight: '500' }}>
                       {decoy.label}
+                    </td>
+                    <td style={{ padding: '0.875rem 1rem' }}>
+                      {(decoy.badge_text || '').trim() ? (
+                        <span style={{
+                          padding: '0.2rem 0.65rem',
+                          borderRadius: '999px',
+                          fontSize: '0.75rem',
+                          background: 'rgba(56,189,248,0.15)',
+                          border: '1px solid rgba(56,189,248,0.4)',
+                          color: '#7DD3FC'
+                        }}>
+                          {decoy.badge_text}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>不显示</span>
+                      )}
                     </td>
                     <td style={{ padding: '0.875rem 1rem', color: 'var(--text-secondary)' }}>{decoy.sort_order}</td>
                     <td style={{ padding: '0.875rem 1rem' }}>
@@ -243,6 +273,37 @@ const DecoyPage = () => {
                 onChange={e => setFormData(p => ({ ...p, label: e.target.value }))}
                 placeholder="例：9.9折优惠券"
               />
+            </div>
+
+            {/* 角标：默认不显示，要显示必须自己填文字 */}
+            <div style={{ marginBottom: '1rem', padding: '1rem', borderRadius: '8px',
+              background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <input type="checkbox" id="decoy-show-badge" checked={formData.show_badge}
+                  onChange={e => setFormData(p => ({ ...p, show_badge: e.target.checked }))}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <label htmlFor="decoy-show-badge" style={{ color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  显示角标
+                </label>
+              </div>
+              {formData.show_badge ? (
+                <div style={{ marginTop: '0.75rem' }}>
+                  <input style={inputStyle}
+                    value={formData.badge_text}
+                    onChange={e => setFormData(p => ({ ...p, badge_text: e.target.value }))}
+                    maxLength={12}
+                    placeholder="例：限时活动"
+                  />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                    最多 12 个字，显示在道具文字下方
+                  </p>
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '0.5rem', marginLeft: '1.75rem' }}>
+                  不勾选时抽奖页不会出现任何角标
+                </p>
+              )}
             </div>
 
             <div style={{ marginBottom: '1rem' }}>

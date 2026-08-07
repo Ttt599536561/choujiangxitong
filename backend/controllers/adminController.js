@@ -338,6 +338,55 @@ exports.deleteUser = (req, res) => {
 };
 
 /**
+ * 批量删除用户
+ * 请求体：{ ids: [1, 2, 3] }
+ * 注意：不会删除 lottery_records 里的抽奖历史。历史按邮箱记录，
+ * 保留是为了审计，也为了防止「删号后重新导入」绕过一个邮箱只能抽一次的限制。
+ */
+exports.batchDeleteUsers = (req, res) => {
+  const { ids } = req.body;
+
+  if (!Array.isArray(ids)) {
+    return res.status(400).json({ error: '请提供要删除的用户 ID 列表' });
+  }
+
+  // 去重 + 只保留合法整数
+  const seen = new Set();
+  const list = [];
+  for (const raw of ids) {
+    const id = parseInt(raw, 10);
+    if (!Number.isInteger(id) || seen.has(id)) continue;
+    seen.add(id);
+    list.push(id);
+  }
+
+  if (list.length === 0) {
+    return res.status(400).json({ error: '请提供至少一个有效的用户 ID' });
+  }
+
+  try {
+    const deleteStmt = db.prepare('DELETE FROM users WHERE id = ?');
+    let deleted = 0;
+    const deleteMany = db.transaction((items) => {
+      for (const id of items) {
+        const result = deleteStmt.run(id);
+        if (result.changes > 0) deleted++;
+      }
+    });
+    deleteMany(list);
+
+    res.json({
+      success: true,
+      deleted,
+      requested: list.length
+    });
+  } catch (error) {
+    console.error('批量删除用户失败:', error);
+    res.status(500).json({ error: '批量删除用户失败' });
+  }
+};
+
+/**
  * 批量导入用户（CSV / Excel .xlsx/.xls）
  */
 exports.importUsers = (req, res) => {
@@ -801,15 +850,24 @@ exports.getDecoys = (req, res) => {
 /**
  * 新增花样道具
  */
+/**
+ * 归一化角标文字：空/空白 = 不显示角标，最长 12 字
+ * 前台只在这个值非空时才渲染角标，不再写死任何文案
+ */
+const normalizeBadgeText = (value) => {
+  if (value === undefined || value === null) return '';
+  return String(value).trim().slice(0, 12);
+};
+
 exports.addDecoy = (req, res) => {
-  const { icon, label, sort_order = 0, enabled = 1 } = req.body;
+  const { icon, label, badge_text, sort_order = 0, enabled = 1 } = req.body;
   if (!icon || !label) {
     return res.status(400).json({ error: '请提供图标和文字标签' });
   }
   try {
     const result = db.prepare(
-      'INSERT INTO slot_decoys (icon, label, sort_order, enabled) VALUES (?, ?, ?, ?)'
-    ).run(icon.trim(), label.trim(), sort_order, enabled ? 1 : 0);
+      'INSERT INTO slot_decoys (icon, label, badge_text, sort_order, enabled) VALUES (?, ?, ?, ?, ?)'
+    ).run(icon.trim(), label.trim(), normalizeBadgeText(badge_text), sort_order, enabled ? 1 : 0);
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (error) {
     console.error('新增花样道具失败:', error);
@@ -822,14 +880,14 @@ exports.addDecoy = (req, res) => {
  */
 exports.updateDecoy = (req, res) => {
   const { id } = req.params;
-  const { icon, label, sort_order, enabled } = req.body;
+  const { icon, label, badge_text, sort_order, enabled } = req.body;
   if (!icon || !label) {
     return res.status(400).json({ error: '请提供图标和文字标签' });
   }
   try {
     db.prepare(
-      'UPDATE slot_decoys SET icon = ?, label = ?, sort_order = ?, enabled = ? WHERE id = ?'
-    ).run(icon.trim(), label.trim(), sort_order ?? 0, enabled ? 1 : 0, id);
+      'UPDATE slot_decoys SET icon = ?, label = ?, badge_text = ?, sort_order = ?, enabled = ? WHERE id = ?'
+    ).run(icon.trim(), label.trim(), normalizeBadgeText(badge_text), sort_order ?? 0, enabled ? 1 : 0, id);
     res.json({ success: true });
   } catch (error) {
     console.error('更新花样道具失败:', error);

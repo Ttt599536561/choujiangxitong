@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from './AdminLayout';
 import { configApi } from '../../services/adminApi';
+import { setCurrencySymbol, DEFAULT_SYMBOL } from '../../hooks/useCurrencySymbol';
 
 const ConfigPage = () => {
   const [config, setConfig] = useState({
@@ -39,6 +40,8 @@ const ConfigPage = () => {
 
     try {
       await configApi.updateConfig(config);
+      // 同步给奖项/兑换码/记录/用户页，切过去不用刷新就是新符号
+      setCurrencySymbol(config.currency_symbol);
       setMessage({ type: 'success', text: '配置保存成功！' });
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
@@ -52,6 +55,9 @@ const ConfigPage = () => {
   const handleChange = (field, value) => {
     setConfig({ ...config, [field]: value });
   };
+
+  // 门槛输入框的单位跟着货币符号走；留空时按后端口径回退成 ¥
+  const symbolPreview = (config.currency_symbol || '').trim() || DEFAULT_SYMBOL;
 
   if (loading) {
     return (
@@ -177,7 +183,7 @@ const ConfigPage = () => {
                   color: 'var(--text-primary)',
                   marginBottom: '0.5rem'
                 }}>
-                  充值门槛（元）
+                  充值门槛（{symbolPreview}）
                 </label>
                 <input
                   type="number"

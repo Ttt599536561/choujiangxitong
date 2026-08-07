@@ -66,6 +66,7 @@ export const userApi = {
   addUser: (data) => adminApi.post('/admin/users', data),
   updateUser: (id, data) => adminApi.put(`/admin/users/${id}`, data),
   deleteUser: (id) => adminApi.delete(`/admin/users/${id}`),
+  batchDeleteUsers: (ids) => adminApi.post('/admin/users/batch-delete', { ids }),
   importUsers: (file) => {
     const formData = new FormData();
     formData.append('file', file);

@@ -25,6 +25,7 @@ router.get('/users', adminController.getUsers);
 router.post('/users', adminController.addUser);
 router.put('/users/:id', adminController.updateUser);
 router.delete('/users/:id', adminController.deleteUser);
+router.post('/users/batch-delete', adminController.batchDeleteUsers);
 router.post('/users/import', upload.single('file'), adminController.importUsers);
 
 // 兑换码管理

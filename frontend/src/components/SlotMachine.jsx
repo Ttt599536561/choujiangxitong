@@ -33,6 +33,35 @@ const Toast = ({ message, type = 'error', onClose }) => {
   );
 };
 
+// 条目高度：JS 和 CSS 共用这一份数字
+// 之前 CSS 手机端写 100px、JS 写死 120px，两边一对不上中奖行就偏了
+// 现在由 JS 通过 --slot-item-height 下发，CSS 里不要再另写一份高度
+const ITEM_HEIGHT_DESKTOP = 176;
+const ITEM_HEIGHT_MOBILE = 140;
+const MOBILE_QUERY = '(max-width: 768px)';
+
+const useItemHeight = () => {
+  const [itemHeight, setItemHeight] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return ITEM_HEIGHT_DESKTOP;
+    return window.matchMedia(MOBILE_QUERY).matches ? ITEM_HEIGHT_MOBILE : ITEM_HEIGHT_DESKTOP;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const sync = (e) => setItemHeight(e.matches ? ITEM_HEIGHT_MOBILE : ITEM_HEIGHT_DESKTOP);
+    // 老版本 Safari 只有 addListener
+    if (mq.addEventListener) mq.addEventListener('change', sync);
+    else mq.addListener(sync);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', sync);
+      else mq.removeListener(sync);
+    };
+  }, []);
+
+  return itemHeight;
+};
+
 // 将奖品和花样道具交错排列，增加滚动时的悬念感
 const buildAllItems = (prizes, decoys) => {
   if (!decoys || decoys.length === 0) return prizes;
@@ -45,6 +74,8 @@ const buildAllItems = (prizes, decoys) => {
         id: `decoy-${decoys[i].id}`,
         prize_icon: decoys[i].icon,
         prize_name: decoys[i].label,
+        // 角标文字为空 = 后台没配，前台就不显示；这里不兜任何默认文案
+        badge_text: (decoys[i].badge_text || '').trim(),
         is_decoy: true
       });
     }
@@ -52,31 +83,28 @@ const buildAllItems = (prizes, decoys) => {
   return result;
 };
 
-const SlotColumn = ({ items, isSpinning, finalPrize, initialOffset = 0, onStopComplete, currencySymbol }) => {
-  const itemHeight = 120;
-  const [position, setPosition] = useState(() => -(initialOffset * 120));
+const SlotColumn = ({ items, isSpinning, finalPrize, initialOffset = 0, onStopComplete, currencySymbol, itemHeight }) => {
+  // 位置按“第几个条目”记，不按像素记
+  // 这样切换手机/桌面尺寸时条目高度变了，中奖行照样对得准
+  const [offsetIndex, setOffsetIndex] = useState(initialOffset);
 
   useEffect(() => {
     if (!isSpinning) {
       // 使用第二份复制中的目标位置，避免 index=0 时的边缘问题
       const finalIndex = items.findIndex(p => p.id === finalPrize?.id);
       if (finalIndex !== -1) {
-        const targetIndex = items.length + finalIndex;
-        const targetPosition = -(targetIndex - 1) * itemHeight;
-        setPosition(targetPosition);
+        setOffsetIndex(items.length + finalIndex - 1);
         setTimeout(() => onStopComplete(), 500);
       }
     } else {
       const interval = setInterval(() => {
-        setPosition(prev => {
-          const newPos = prev - itemHeight;
-          if (Math.abs(newPos) >= items.length * itemHeight) return 0;
-          return newPos;
-        });
+        setOffsetIndex(prev => (prev + 1 >= items.length ? 0 : prev + 1));
       }, 100);
       return () => clearInterval(interval);
     }
-  }, [isSpinning, finalPrize, items, itemHeight]);
+  }, [isSpinning, finalPrize, items]);
+
+  const position = -(offsetIndex * itemHeight);
 
   const displayItems = [...items, ...items, ...items];
 
@@ -94,7 +122,8 @@ const SlotColumn = ({ items, isSpinning, finalPrize, initialOffset = 0, onStopCo
             <div className="prize-icon">{item.prize_icon}</div>
             <div className="prize-name">{item.prize_name}</div>
             {item.is_decoy ? (
-              <div className="decoy-badge">限时活动</div>
+              // 只有后台填了角标文字才显示
+              item.badge_text ? <div className="decoy-badge">{item.badge_text}</div> : null
             ) : !item.is_thanks ? (
               <div className="prize-amount">{currencySymbol}{item.prize_amount}</div>
             ) : null}
@@ -111,6 +140,7 @@ const SlotMachine = ({ prizes, decoys = [], onDrawComplete, currencySymbol = '¥
   const [toast, setToast] = useState(null);
   const [result, setResult] = useState(null);
   const [stoppedColumns, setStoppedColumns] = useState([false, false, false]);
+  const itemHeight = useItemHeight();
 
   const allItems = buildAllItems(prizes, decoys);
 
@@ -154,8 +184,9 @@ const SlotMachine = ({ prizes, decoys = [], onDrawComplete, currencySymbol = '¥
     }
   };
 
+  // 条目高度下发给 CSS，列高/高亮框都按它算，不会和 JS 动画错位
   return (
-    <div className="slot-machine-container">
+    <div className="slot-machine-container" style={{ '--slot-item-height': `${itemHeight}px` }}>
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="slot-machine-header">
@@ -174,6 +205,7 @@ const SlotMachine = ({ prizes, decoys = [], onDrawComplete, currencySymbol = '¥
               initialOffset={columnOffsets[columnIndex]}
               onStopComplete={handleColumnStop}
               currencySymbol={currencySymbol}
+              itemHeight={itemHeight}
             />
           ))}
         </div>

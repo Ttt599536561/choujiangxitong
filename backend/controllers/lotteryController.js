@@ -122,7 +122,7 @@ exports.performLottery = (req, res) => {
 exports.getDecoys = (req, res) => {
   try {
     const decoys = db.prepare(
-      'SELECT id, icon, label, sort_order FROM slot_decoys WHERE enabled = 1 ORDER BY sort_order ASC, id ASC'
+      'SELECT id, icon, label, badge_text, sort_order FROM slot_decoys WHERE enabled = 1 ORDER BY sort_order ASC, id ASC'
     ).all();
     res.json(decoys);
   } catch (error) {

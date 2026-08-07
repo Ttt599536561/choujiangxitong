@@ -1,19 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from './AdminLayout';
 import { userApi } from '../../services/adminApi';
+import { useCurrencySymbol } from '../../hooks/useCurrencySymbol';
 
 const UserPage = () => {
+  const currencySymbol = useCurrencySymbol();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [uploading, setUploading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
     total_recharge: 0
   });
+
+  const allSelected = users.length > 0 && selectedIds.size === users.length;
+
+  const toggleOne = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelectedIds(allSelected ? new Set() : new Set(users.map((u) => u.id)));
+  };
 
   useEffect(() => {
     loadUsers();
@@ -23,6 +41,9 @@ const UserPage = () => {
     try {
       const response = await userApi.getUsers();
       setUsers(response.data);
+      // 丢掉已不存在的选中项，避免删除/导入后残留脏 ID
+      const alive = new Set(response.data.map((u) => u.id));
+      setSelectedIds((prev) => new Set([...prev].filter((id) => alive.has(id))));
     } catch (error) {
       console.error('加载用户失败:', error);
       setMessage({ type: 'error', text: '加载用户失败' });
@@ -85,6 +106,39 @@ const UserPage = () => {
     } catch (error) {
       console.error('删除用户失败:', error);
       setMessage({ type: 'error', text: '删除失败' });
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    const scope = allSelected
+      ? `全部 ${ids.length} 个用户`
+      : `选中的 ${ids.length} 个用户`;
+    const warning = [
+      `确定要删除${scope}吗？此操作不可恢复。`,
+      '',
+      '注意：抽奖记录按邮箱单独保存，不会随用户一起删除。',
+      '已经抽过奖的邮箱，即使删掉用户再重新导入，也仍然不能再抽一次。'
+    ].join('\n');
+    if (!confirm(warning)) return;
+
+    setDeleting(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const response = await userApi.batchDeleteUsers(ids);
+      const deleted = response.data?.deleted ?? ids.length;
+      setMessage({ type: 'success', text: `已删除 ${deleted} 个用户` });
+      setSelectedIds(new Set());
+      loadUsers();
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('批量删除用户失败:', error);
+      setMessage({ type: 'error', text: error.response?.data?.error || '批量删除失败' });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -157,10 +211,35 @@ const UserPage = () => {
               👥 用户管理
             </h1>
             <p style={{ color: 'var(--text-secondary)' }}>
-              管理用户邮箱和充值金额（共 {users.length} 个用户）
+              管理用户邮箱和充值金额（共 {users.length} 个用户
+              {selectedIds.size > 0 && `，已选中 ${selectedIds.size} 个`}）
             </p>
           </div>
           <div style={{ display: 'flex', gap: '1rem' }}>
+            {selectedIds.size > 0 && (
+              <button
+                onClick={handleBatchDelete}
+                disabled={deleting}
+                style={{
+                  padding: '0.875rem 1.5rem',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  color: '#DC2626',
+                  background: 'rgba(220, 38, 38, 0.1)',
+                  border: '1px solid rgba(220, 38, 38, 0.3)',
+                  borderRadius: '12px',
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  opacity: deleting ? 0.5 : 1,
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                {deleting
+                  ? '🗑️ 删除中...'
+                  : allSelected
+                    ? `🗑️ 删除全部 ${selectedIds.size} 个`
+                    : `🗑️ 删除选中 ${selectedIds.size} 个`}
+              </button>
+            )}
             <button
               onClick={downloadTemplate}
               style={{
@@ -258,6 +337,25 @@ const UserPage = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'rgba(233, 165, 104, 0.1)' }}>
+                <th style={{ padding: '1rem', width: '48px', textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      // 部分选中时显示半选状态
+                      if (el) el.indeterminate = selectedIds.size > 0 && !allSelected;
+                    }}
+                    onChange={toggleAll}
+                    disabled={users.length === 0}
+                    title={allSelected ? '取消全选' : '全选'}
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      accentColor: '#E9A568',
+                      cursor: users.length === 0 ? 'not-allowed' : 'pointer'
+                    }}
+                  />
+                </th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>ID</th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>邮箱</th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--text-primary)', fontWeight: '600' }}>累计充值</th>
@@ -267,20 +365,40 @@ const UserPage = () => {
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
+              {users.map((user) => {
+                const isSelected = selectedIds.has(user.id);
+                return (
                 <tr
                   key={user.id}
                   style={{
                     borderBottom: '1px solid rgba(233, 165, 104, 0.1)',
+                    background: isSelected ? 'rgba(233, 165, 104, 0.12)' : 'transparent',
                     transition: 'background 0.2s ease'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(233, 165, 104, 0.05)';
+                    e.currentTarget.style.background = isSelected
+                      ? 'rgba(233, 165, 104, 0.16)'
+                      : 'rgba(233, 165, 104, 0.05)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.background = isSelected
+                      ? 'rgba(233, 165, 104, 0.12)'
+                      : 'transparent';
                   }}
                 >
+                  <td style={{ padding: '1rem', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleOne(user.id)}
+                      style={{
+                        width: '18px',
+                        height: '18px',
+                        accentColor: '#E9A568',
+                        cursor: 'pointer'
+                      }}
+                    />
+                  </td>
                   <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>
                     #{user.id}
                   </td>
@@ -288,7 +406,7 @@ const UserPage = () => {
                     {user.email}
                   </td>
                   <td style={{ padding: '1rem', color: '#E9A568', fontWeight: '600' }}>
-                    ¥{user.total_recharge}
+                    {currencySymbol}{user.total_recharge}
                   </td>
                   <td style={{ padding: '1rem', color: 'var(--text-primary)' }}>
                     {user.draw_count || 0} 次
@@ -330,7 +448,8 @@ const UserPage = () => {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
 
@@ -428,7 +547,7 @@ const UserPage = () => {
                     color: 'var(--text-primary)',
                     marginBottom: '0.5rem'
                   }}>
-                    累计充值（元）*
+                    累计充值（{currencySymbol}）*
                   </label>
                   <input
                     type="number"

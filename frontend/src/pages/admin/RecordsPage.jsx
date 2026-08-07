@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from './AdminLayout';
 import { recordsApi } from '../../services/adminApi';
+import { useCurrencySymbol } from '../../hooks/useCurrencySymbol';
 
 const RecordsPage = () => {
+  const currencySymbol = useCurrencySymbol();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('all'); // all, winner, thanks
@@ -184,7 +186,7 @@ const RecordsPage = () => {
                         <span style={{ color: 'var(--text-secondary)' }}>-</span>
                       ) : (
                         <span style={{ color: '#E9A568', fontWeight: '600' }}>
-                          ¥{record.prize_amount}
+                          {currencySymbol}{record.prize_amount}
                         </span>
                       )}
                     </td>
