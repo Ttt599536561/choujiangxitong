@@ -1,0 +1,153 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-content {
+  background: linear-gradient(135deg, #161D2B 0%, #1E2636 100%);
+  border-radius: 24px;
+  padding: 3rem 2rem;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+  border: 2px solid rgba(233, 165, 104, 0.3);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  position: relative;
+}
+
+.modal-header {
+  margin-bottom: 2rem;
+}
+
+.prize-icon-large {
+  font-size: 5rem;
+  margin-bottom: 1rem;
+  display: inline-block;
+}
+
+.modal-title {
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.winner-title {
+  background: linear-gradient(135deg, #E9A568 0%, #FFD700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.thanks-title {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  margin-bottom: 2rem;
+}
+
+.prize-info {
+  margin-bottom: 2rem;
+}
+
+.prize-name-large {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.prize-amount-large {
+  font-size: 3rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #E9A568 0%, #FFD700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.code-section {
+  background: #0F131C;
+  border-radius: 16px;
+  padding: 1.5rem;
+  border: 2px solid rgba(233, 165, 104, 0.2);
+}
+
+.code-label {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.code-display {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #E9A568;
+  background: rgba(233, 165, 104, 0.1);
+  padding: 1rem;
+  border-radius: 12px;
+  letter-spacing: 0.1em;
+  font-family: 'Courier New', monospace;
+  margin-bottom: 0.75rem;
+  word-break: break-all;
+}
+
+.code-hint {
+  font-size: 0.875rem;
+  color: #DC2626;
+  line-height: 1.4;
+}
+
+.thanks-message {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.close-button {
+  padding: 1rem 2.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #E9A568 0%, #d89558 100%);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 30px rgba(233, 165, 104, 0.3);
+}
+
+.close-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 40px rgba(233, 165, 104, 0.4);
+}
+
+.close-button:active {
+  transform: translateY(0);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .modal-content {
+    padding: 2rem 1.5rem;
+  }
+
+  .prize-icon-large {
+    font-size: 4rem;
+  }
+
+  .prize-amount-large {
+    font-size: 2.5rem;
+  }
+
+  .code-display {
+    font-size: 1.25rem;
+  }
+}

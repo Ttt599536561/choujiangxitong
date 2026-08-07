@@ -1,0 +1,263 @@
+.slot-machine-container {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.slot-machine-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.slot-title {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  background: linear-gradient(135deg, #E9A568 0%, #FFD700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.slot-subtitle {
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  color: var(--text-secondary);
+}
+
+/* 老虎机主体 */
+.slot-machine {
+  position: relative;
+  background: linear-gradient(135deg, #161D2B 0%, #1E2636 100%);
+  border-radius: 24px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(233, 165, 104, 0.2);
+}
+
+.slot-frame {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  position: relative;
+}
+
+/* 单列老虎机 */
+.slot-column {
+  background: #0F131C;
+  border-radius: 16px;
+  height: 360px;
+  overflow: hidden;
+  position: relative;
+  border: 2px solid rgba(233, 165, 104, 0.3);
+  box-shadow: inset 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+/* 中奖行高亮区域 */
+.slot-column::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 120px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg,
+    rgba(233, 165, 104, 0.15) 0%,
+    rgba(233, 165, 104, 0.25) 50%,
+    rgba(233, 165, 104, 0.15) 100%);
+  border-top: 2px solid rgba(233, 165, 104, 0.6);
+  border-bottom: 2px solid rgba(233, 165, 104, 0.6);
+  pointer-events: none;
+  z-index: 5;
+  box-shadow:
+    0 0 20px rgba(233, 165, 104, 0.3),
+    inset 0 0 20px rgba(233, 165, 104, 0.1);
+}
+
+.slot-column-inner {
+  will-change: transform;
+}
+
+.slot-item {
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  border-bottom: 1px solid rgba(233, 165, 104, 0.1);
+}
+
+.prize-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.prize-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.prize-amount {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #E9A568;
+}
+
+/* 指示器 - 已移除 */
+
+/* 输入区域 */
+.slot-input-section {
+  text-align: center;
+}
+
+.email-input-wrapper {
+  margin-bottom: 1rem;
+}
+
+.email-input {
+  width: 100%;
+  max-width: 400px;
+  padding: 1rem 1.5rem;
+  font-size: 1rem;
+  border-radius: 999px;
+  border: 2px solid rgba(233, 165, 104, 0.3);
+  background: #161D2B;
+  color: var(--text-primary);
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.email-input:focus {
+  border-color: #E9A568;
+  box-shadow: 0 0 0 4px rgba(233, 165, 104, 0.1);
+}
+
+.email-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.email-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Toast 浮层提示 */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(220, 38, 38, 0.95);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  animation: slideDown 0.3s ease-out;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.draw-button {
+  padding: 1.25rem 3rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 30px rgba(220, 38, 38, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.draw-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.draw-button:hover::before {
+  left: 100%;
+}
+
+.draw-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 40px rgba(220, 38, 38, 0.4);
+}
+
+.draw-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.draw-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .slot-machine-container {
+    padding: 1rem;
+  }
+
+  .slot-machine {
+    padding: 1rem;
+  }
+
+  .slot-frame {
+    gap: 0.75rem;
+  }
+
+  .slot-column {
+    height: 300px;
+  }
+
+  .slot-item {
+    height: 100px;
+  }
+
+  .prize-icon {
+    font-size: 2rem;
+  }
+
+  .prize-name {
+    font-size: 0.875rem;
+  }
+
+  .prize-amount {
+    font-size: 1rem;
+  }
+
+  .draw-button {
+    padding: 1rem 2rem;
+    font-size: 1rem;
+  }
+}
+
+/* Toast 动画 */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}

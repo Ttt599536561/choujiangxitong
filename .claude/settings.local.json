@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm list *)",
+      "Bash(npm cache *)",
+      "Bash(node config/database.js)",
+      "Bash(npm run *)",
+      "Bash(npm uninstall *)",
+      "Bash(timeout 5 npm start)",
+      "Bash(cd ../backend && timeout 5 npm start 2>&1 || true)",
+      "Bash(npm start *)",
+      "Bash(curl http://localhost:3000/api/health)",
+      "Bash(curl http://localhost:5173/ -I)",
+      "Bash(curl http://localhost:5173/)",
+      "Bash(curl http://localhost:5173/ -s)",
+      "Bash(curl http://localhost:5173/ -v)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(xargs grep -l \"currency\\\\|symbol\\\\|¥\")",
+      "Bash(node app.js)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(taskkill //F //PID 101016)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}
