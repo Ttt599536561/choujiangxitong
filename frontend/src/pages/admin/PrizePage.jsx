@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AdminLayout from './AdminLayout';
-import { prizeApi } from '../../services/adminApi';
+import { prizeApi, iconApi } from '../../services/adminApi';
 import { useCurrencySymbol } from '../../hooks/useCurrencySymbol';
 
 const PrizePage = () => {
@@ -10,6 +10,8 @@ const PrizePage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingPrize, setEditingPrize] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+  const iconFileInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     prize_name: '',
@@ -100,6 +102,21 @@ const PrizePage = () => {
     } catch (error) {
       console.error('删除奖项失败:', error);
       setMessage({ type: 'error', text: '删除失败' });
+    }
+  };
+
+  const handleIconUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingIcon(true);
+    try {
+      const response = await iconApi.uploadIcon(file);
+      setFormData(prev => ({ ...prev, prize_icon: response.data.url }));
+    } catch (err) {
+      setMessage({ type: 'error', text: err.response?.data?.error || 'SVG 上传失败' });
+    } finally {
+      setUploadingIcon(false);
+      e.target.value = '';
     }
   };
 
@@ -210,7 +227,11 @@ const PrizePage = () => {
                     e.currentTarget.style.background = 'transparent';
                   }}
                 >
-                  <td style={{ padding: '1rem', fontSize: '2rem' }}>{prize.prize_icon}</td>
+                  <td style={{ padding: '1rem' }}>
+                    {prize.prize_icon && (prize.prize_icon.startsWith('/') || prize.prize_icon.startsWith('http'))
+                      ? <img src={prize.prize_icon} alt="" style={{ width: '2rem', height: '2rem', objectFit: 'contain' }} />
+                      : <span style={{ fontSize: '2rem' }}>{prize.prize_icon}</span>}
+                  </td>
                   <td style={{ padding: '1rem', color: 'var(--text-primary)', fontWeight: '600' }}>
                     {prize.prize_name}
                   </td>
@@ -362,9 +383,29 @@ const PrizePage = () => {
                     color: 'var(--text-primary)',
                     marginBottom: '0.5rem'
                   }}>
-                    选择图标 *
+                    图标 *
                   </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem' }}>
+
+                  {/* 当前图标预览 */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    marginBottom: '0.75rem',
+                    padding: '0.625rem 1rem',
+                    background: '#0F131C',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(233, 165, 104, 0.2)'
+                  }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>当前：</span>
+                    {formData.prize_icon && (formData.prize_icon.startsWith('/') || formData.prize_icon.startsWith('http'))
+                      ? <img src={formData.prize_icon} alt="" style={{ width: '2.5rem', height: '2.5rem', objectFit: 'contain' }} />
+                      : <span style={{ fontSize: '2.5rem' }}>{formData.prize_icon}</span>}
+                  </div>
+
+                  {/* 预设 Emoji */}
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginBottom: '0.4rem' }}>预设图标</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem', marginBottom: '0.875rem' }}>
                     {iconOptions.map((icon) => (
                       <button
                         key={icon}
@@ -384,6 +425,34 @@ const PrizePage = () => {
                       </button>
                     ))}
                   </div>
+
+                  {/* SVG 上传 */}
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginBottom: '0.4rem' }}>或上传自定义 SVG</p>
+                  <input
+                    ref={iconFileInputRef}
+                    type="file"
+                    accept=".svg,image/svg+xml"
+                    style={{ display: 'none' }}
+                    onChange={handleIconUpload}
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingIcon}
+                    onClick={() => iconFileInputRef.current?.click()}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      fontSize: '0.9rem',
+                      color: uploadingIcon ? 'var(--text-secondary)' : '#38BDF8',
+                      background: 'rgba(56, 189, 248, 0.07)',
+                      border: '1.5px dashed rgba(56, 189, 248, 0.4)',
+                      borderRadius: '10px',
+                      cursor: uploadingIcon ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {uploadingIcon ? '上传中…' : '📁 选择 SVG 文件（最大 1 MB）'}
+                  </button>
                 </div>
 
                 {/* 是否为谢谢参与 */}

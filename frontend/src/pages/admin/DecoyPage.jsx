@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AdminLayout from './AdminLayout';
-import { decoyApi } from '../../services/adminApi';
+import { decoyApi, iconApi } from '../../services/adminApi';
 
 const DecoyPage = () => {
   const [decoys, setDecoys] = useState([]);
@@ -13,6 +13,8 @@ const DecoyPage = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+  const iconFileInputRef = useRef(null);
 
   useEffect(() => {
     loadDecoys();
@@ -93,6 +95,22 @@ const DecoyPage = () => {
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('删除失败');
+    }
+  };
+
+  const handleIconUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingIcon(true);
+    setError('');
+    try {
+      const response = await iconApi.uploadIcon(file);
+      setFormData(p => ({ ...p, icon: response.data.url }));
+    } catch (err) {
+      setError(err.response?.data?.error || 'SVG 上传失败');
+    } finally {
+      setUploadingIcon(false);
+      e.target.value = '';
     }
   };
 
@@ -184,7 +202,11 @@ const DecoyPage = () => {
               <tbody>
                 {decoys.map((decoy) => (
                   <tr key={decoy.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '0.875rem 1rem', fontSize: '1.75rem' }}>{decoy.icon}</td>
+                    <td style={{ padding: '0.875rem 1rem' }}>
+                      {decoy.icon && (decoy.icon.startsWith('/') || decoy.icon.startsWith('http'))
+                        ? <img src={decoy.icon} alt="" style={{ width: '1.75rem', height: '1.75rem', objectFit: 'contain' }} />
+                        : <span style={{ fontSize: '1.75rem' }}>{decoy.icon}</span>}
+                    </td>
                     <td style={{ padding: '0.875rem 1rem', color: 'var(--text-primary)', fontWeight: '500' }}>
                       {decoy.label}
                     </td>
@@ -251,18 +273,57 @@ const DecoyPage = () => {
 
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '0.875rem',
-                marginBottom: '0.5rem' }}>图标（Emoji）</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input style={{ ...inputStyle, width: '80px', fontSize: '1.5rem', textAlign: 'center' }}
-                  value={formData.icon}
+                marginBottom: '0.5rem' }}>图标</label>
+
+              {/* 当前图标预览 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem',
+                marginBottom: '0.625rem', padding: '0.5rem 0.75rem',
+                background: 'rgba(22, 29, 43, 0.8)', borderRadius: '8px',
+                border: '1px solid rgba(233,165,104,0.15)' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>当前：</span>
+                {formData.icon && (formData.icon.startsWith('/') || formData.icon.startsWith('http'))
+                  ? <img src={formData.icon} alt="" style={{ width: '2rem', height: '2rem', objectFit: 'contain' }} />
+                  : <span style={{ fontSize: '2rem' }}>{formData.icon}</span>}
+              </div>
+
+              {/* Emoji 直接输入 */}
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <input style={{ ...inputStyle, width: '90px', fontSize: '1.5rem', textAlign: 'center' }}
+                  value={formData.icon.startsWith('/') || formData.icon.startsWith('http') ? '' : formData.icon}
                   onChange={e => setFormData(p => ({ ...p, icon: e.target.value }))}
                   maxLength={4}
                   placeholder="🎟️"
                 />
                 <span style={{ alignSelf: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                  预览: {formData.icon}
+                  输入 Emoji，或从下方上传 SVG
                 </span>
               </div>
+
+              {/* SVG 上传 */}
+              <input
+                ref={iconFileInputRef}
+                type="file"
+                accept=".svg,image/svg+xml"
+                style={{ display: 'none' }}
+                onChange={handleIconUpload}
+              />
+              <button
+                type="button"
+                disabled={uploadingIcon}
+                onClick={() => iconFileInputRef.current?.click()}
+                style={{
+                  width: '100%',
+                  padding: '0.6rem',
+                  fontSize: '0.85rem',
+                  color: uploadingIcon ? 'var(--text-secondary)' : '#38BDF8',
+                  background: 'rgba(56, 189, 248, 0.07)',
+                  border: '1.5px dashed rgba(56, 189, 248, 0.4)',
+                  borderRadius: '8px',
+                  cursor: uploadingIcon ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {uploadingIcon ? '上传中…' : '📁 上传自定义 SVG（最大 1 MB）'}
+              </button>
             </div>
 
             <div style={{ marginBottom: '1rem' }}>

@@ -119,7 +119,11 @@ const SlotColumn = ({ items, isSpinning, finalPrize, initialOffset = 0, onStopCo
       >
         {displayItems.map((item, index) => (
           <div key={`${item.id}-${index}`} className={`slot-item${item.is_decoy ? ' slot-item-decoy' : ''}`}>
-            <div className="prize-icon">{item.prize_icon}</div>
+            <div className="prize-icon">
+              {item.prize_icon && (item.prize_icon.startsWith('/') || item.prize_icon.startsWith('http'))
+                ? <img src={item.prize_icon} alt={item.prize_name} className="prize-icon-img" />
+                : item.prize_icon}
+            </div>
             <div className="prize-name">{item.prize_name}</div>
             {item.is_decoy ? (
               // 只有后台填了角标文字才显示

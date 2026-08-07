@@ -908,3 +908,15 @@ exports.deleteDecoy = (req, res) => {
     res.status(500).json({ error: '删除花样道具失败' });
   }
 };
+
+/**
+ * 上传自定义图标（SVG）
+ * multer diskStorage 已将文件写到 uploads/icons/<uuid>.svg
+ * 直接返回可供前端使用的静态路径
+ */
+exports.uploadIcon = (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: '没有收到上传文件' });
+  }
+  res.json({ url: `/uploads/icons/${req.file.filename}` });
+};

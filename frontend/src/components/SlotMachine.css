@@ -108,6 +108,15 @@
   margin-bottom: 0.5rem;
 }
 
+/* 自定义 SVG 图标 */
+.prize-icon-img {
+  width: 2.75rem;
+  height: 2.75rem;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
 .prize-name {
   font-size: 1rem;
   font-weight: 600;

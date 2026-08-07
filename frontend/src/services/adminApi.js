@@ -107,4 +107,15 @@ export const decoyApi = {
   deleteDecoy: (id) => adminApi.delete(`/admin/decoys/${id}`)
 };
 
+// 自定义图标上传（SVG）
+export const iconApi = {
+  uploadIcon: (file) => {
+    const formData = new FormData();
+    formData.append('icon', file);
+    return adminApi.post('/admin/upload-icon', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  }
+};
+
 export default adminApi;

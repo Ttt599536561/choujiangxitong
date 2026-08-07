@@ -15,6 +15,9 @@ async function startServer() {
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173'
 }));
+
+// 上传文件的静态服务（供前端加载自定义图标）
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // 批量粘贴兑换码时请求体可能较大，放宽默认的 100kb 限制
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
