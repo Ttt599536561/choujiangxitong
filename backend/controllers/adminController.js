@@ -3,7 +3,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const csv = require('csv-parser');
 const fs = require('fs');
+const path = require('path');
 const iconv = require('iconv-lite');
+const xlsx = require('xlsx');
 
 /**
  * 解析金额字符串，兼容 Excel 导出的常见格式：
@@ -79,6 +81,17 @@ function cleanupTempFile(filePath) {
 }
 
 /**
+ * 解析 Excel 文件（.xlsx/.xls），返回与 CSV 行对象格式一致的数组。
+ * 单元格数值会被转为字符串以便 pickField / parseAmount 统一处理。
+ */
+function parseXlsxFile(filePath) {
+  const workbook = xlsx.readFile(filePath);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  // raw:false 让数字/日期也返回格式化字符串，defval:'' 补空列
+  return xlsx.utils.sheet_to_json(sheet, { raw: false, defval: '' });
+}
+
+/**
  * 管理员登录
  */
 exports.login = (req, res) => {
@@ -132,10 +145,14 @@ exports.updateConfig = (req, res) => {
     reject_message,
     max_winners,
     limit_reached_message,
-    thanks_message
+    thanks_message,
+    currency_symbol
   } = req.body;
 
   try {
+    // 货币符号为空时回退为 ¥，避免前台金额没有任何前缀
+    const symbol = (currency_symbol || '').trim() || '¥';
+
     db.prepare(`
       UPDATE lottery_config
       SET lottery_mode = ?,
@@ -144,6 +161,7 @@ exports.updateConfig = (req, res) => {
           max_winners = ?,
           limit_reached_message = ?,
           thanks_message = ?,
+          currency_symbol = ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = 1
     `).run(
@@ -152,7 +170,8 @@ exports.updateConfig = (req, res) => {
       reject_message,
       max_winners,
       limit_reached_message,
-      thanks_message
+      thanks_message,
+      symbol
     );
 
     res.json({ success: true, message: '配置更新成功' });
@@ -319,18 +338,82 @@ exports.deleteUser = (req, res) => {
 };
 
 /**
- * 批量导入用户（CSV）
+ * 批量导入用户（CSV / Excel .xlsx/.xls）
  */
 exports.importUsers = (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: '请上传CSV文件' });
+    return res.status(400).json({ error: '请上传 CSV 或 Excel 文件' });
   }
 
+  // 将行数组写入数据库，CSV 和 xlsx 路径共用
+  const insertRows = (rows) => {
+    const users = [];
+    const errors = [];
+
+    for (const row of rows) {
+      const email = pickField(row, 'email');
+      const amountRaw = pickField(row, 'total_recharge', 'recharge_amount', 'amount');
+      if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        users.push({ email, total_recharge: parseAmount(amountRaw) });
+      } else {
+        errors.push(`无效邮箱: ${email || '(空)'}`);
+      }
+    }
+
+    if (users.length === 0) {
+      cleanupTempFile(req.file.path);
+      return res.status(400).json({
+        error: '文件中没有可导入的有效数据，请确认表头包含 email 列' +
+          (errors.length > 0 ? `（${errors.slice(0, 3).join('; ')}）` : '')
+      });
+    }
+
+    let successCount = 0;
+    try {
+      const insertStmt = db.prepare(
+        'INSERT OR REPLACE INTO users (email, total_recharge) VALUES (?, ?)'
+      );
+      const insertMany = db.transaction((list) => {
+        for (const user of list) {
+          insertStmt.run(user.email, user.total_recharge);
+          successCount++;
+        }
+      });
+      insertMany(users);
+    } catch (error) {
+      console.error('导入用户失败:', error);
+      cleanupTempFile(req.file.path);
+      return res.status(500).json({ error: `导入失败: ${error.message}` });
+    }
+
+    cleanupTempFile(req.file.path);
+    res.json({
+      success: true,
+      imported: successCount,
+      total: users.length,
+      errors: errors.length > 0 ? errors : null
+    });
+  };
+
+  // Excel 路径（同步解析）
+  const ext = path.extname(req.file.originalname || '').toLowerCase();
+  if (ext === '.xlsx' || ext === '.xls') {
+    try {
+      const rows = parseXlsxFile(req.file.path);
+      insertRows(rows);
+    } catch (error) {
+      console.error('解析 Excel 失败:', error);
+      cleanupTempFile(req.file.path);
+      res.status(500).json({ error: `Excel 解析失败: ${error.message}` });
+    }
+    return;
+  }
+
+  // CSV 路径（流式，兼容 GBK）
   const users = [];
   const errors = [];
   let responded = false;
 
-  // 统一的失败响应，确保临时文件被清理且只响应一次
   const fail = (message, status = 500) => {
     if (responded) return;
     responded = true;
@@ -342,20 +425,14 @@ exports.importUsers = (req, res) => {
     .on('data', (row) => {
       const email = pickField(row, 'email');
       const amountRaw = pickField(row, 'total_recharge', 'recharge_amount', 'amount');
-
-      // 期望 CSV 格式：email,total_recharge
       if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        users.push({
-          email,
-          total_recharge: parseAmount(amountRaw)
-        });
+        users.push({ email, total_recharge: parseAmount(amountRaw) });
       } else {
         errors.push(`无效邮箱: ${email || '(空)'}`);
       }
     })
     .on('end', () => {
       if (responded) return;
-
       if (users.length === 0) {
         return fail(
           'CSV 中没有可导入的有效数据，请确认表头包含 email 列' +
@@ -363,31 +440,24 @@ exports.importUsers = (req, res) => {
           400
         );
       }
-
       let successCount = 0;
-
       try {
-        const insertStmt = db.prepare(`
-          INSERT OR REPLACE INTO users (email, total_recharge)
-          VALUES (?, ?)
-        `);
-
+        const insertStmt = db.prepare(
+          'INSERT OR REPLACE INTO users (email, total_recharge) VALUES (?, ?)'
+        );
         const insertMany = db.transaction((list) => {
           for (const user of list) {
             insertStmt.run(user.email, user.total_recharge);
             successCount++;
           }
         });
-
         insertMany(users);
       } catch (error) {
         console.error('导入用户失败:', error);
         return fail(`导入失败: ${error.message}`);
       }
-
       responded = true;
       cleanupTempFile(req.file.path);
-
       res.json({
         success: true,
         imported: successCount,
@@ -446,13 +516,79 @@ exports.addCode = (req, res) => {
 };
 
 /**
- * 批量导入兑换码（CSV）
+ * 批量导入兑换码（CSV / Excel .xlsx/.xls）
  */
 exports.importCodes = (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: '请上传CSV文件' });
+    return res.status(400).json({ error: '请上传 CSV 或 Excel 文件' });
   }
 
+  // 将行数组写入数据库，CSV 和 xlsx 路径共用
+  const insertRows = (rows) => {
+    const codes = [];
+    const errors = [];
+
+    for (const row of rows) {
+      const code = pickField(row, 'code');
+      const prizeIdRaw = pickField(row, 'prize_id', 'prizeId');
+      const prizeId = parseInt(prizeIdRaw, 10);
+      if (code && Number.isInteger(prizeId)) {
+        codes.push({ code, prize_id: prizeId });
+      } else {
+        errors.push(`无效数据: ${JSON.stringify(row)}`);
+      }
+    }
+
+    if (codes.length === 0) {
+      cleanupTempFile(req.file.path);
+      return res.status(400).json({
+        error: '文件中没有可导入的有效数据，请确认表头包含 code 与 prize_id 列' +
+          (errors.length > 0 ? `（${errors.slice(0, 3).join('; ')}）` : '')
+      });
+    }
+
+    let successCount = 0;
+    try {
+      const insertStmt = db.prepare(
+        'INSERT OR IGNORE INTO redemption_codes (code, prize_id) VALUES (?, ?)'
+      );
+      const insertMany = db.transaction((list) => {
+        for (const item of list) {
+          const result = insertStmt.run(item.code, item.prize_id);
+          if (result.changes > 0) successCount++;
+        }
+      });
+      insertMany(codes);
+    } catch (error) {
+      console.error('导入兑换码失败:', error);
+      cleanupTempFile(req.file.path);
+      return res.status(500).json({ error: `导入失败: ${error.message}` });
+    }
+
+    cleanupTempFile(req.file.path);
+    res.json({
+      success: true,
+      imported: successCount,
+      total: codes.length,
+      errors: errors.length > 0 ? errors : null
+    });
+  };
+
+  // Excel 路径（同步解析）
+  const ext = path.extname(req.file.originalname || '').toLowerCase();
+  if (ext === '.xlsx' || ext === '.xls') {
+    try {
+      const rows = parseXlsxFile(req.file.path);
+      insertRows(rows);
+    } catch (error) {
+      console.error('解析 Excel 失败:', error);
+      cleanupTempFile(req.file.path);
+      res.status(500).json({ error: `Excel 解析失败: ${error.message}` });
+    }
+    return;
+  }
+
+  // CSV 路径（流式，兼容 GBK）
   const codes = [];
   const errors = [];
   let responded = false;
@@ -466,11 +602,9 @@ exports.importCodes = (req, res) => {
 
   createCsvStream(req.file.path)
     .on('data', (row) => {
-      // 期望 CSV 格式：code,prize_id
       const code = pickField(row, 'code');
       const prizeIdRaw = pickField(row, 'prize_id', 'prizeId');
       const prizeId = parseInt(prizeIdRaw, 10);
-
       if (code && Number.isInteger(prizeId)) {
         codes.push({ code, prize_id: prizeId });
       } else {
@@ -479,7 +613,6 @@ exports.importCodes = (req, res) => {
     })
     .on('end', () => {
       if (responded) return;
-
       if (codes.length === 0) {
         return fail(
           'CSV 中没有可导入的有效数据，请确认表头包含 code 与 prize_id 列' +
@@ -487,31 +620,24 @@ exports.importCodes = (req, res) => {
           400
         );
       }
-
       let successCount = 0;
-
       try {
-        const insertStmt = db.prepare(`
-          INSERT OR IGNORE INTO redemption_codes (code, prize_id)
-          VALUES (?, ?)
-        `);
-
+        const insertStmt = db.prepare(
+          'INSERT OR IGNORE INTO redemption_codes (code, prize_id) VALUES (?, ?)'
+        );
         const insertMany = db.transaction((list) => {
           for (const item of list) {
             const result = insertStmt.run(item.code, item.prize_id);
             if (result.changes > 0) successCount++;
           }
         });
-
         insertMany(codes);
       } catch (error) {
         console.error('导入兑换码失败:', error);
         return fail(`导入失败: ${error.message}`);
       }
-
       responded = true;
       cleanupTempFile(req.file.path);
-
       res.json({
         success: true,
         imported: successCount,

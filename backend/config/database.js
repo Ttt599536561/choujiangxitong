@@ -144,6 +144,19 @@ async function initDatabase() {
     )
   `);
 
+  // 迁移：为早于 currency_symbol 字段创建的旧库补列
+  // CREATE TABLE IF NOT EXISTS 不会修改已存在的表，老库缺列会导致更新配置报错
+  try {
+    const cols = db.exec("PRAGMA table_info(lottery_config)");
+    const colNames = cols.length > 0 ? cols[0].values.map(r => r[1]) : [];
+    if (colNames.length > 0 && !colNames.includes('currency_symbol')) {
+      db.run("ALTER TABLE lottery_config ADD COLUMN currency_symbol TEXT DEFAULT '¥'");
+      console.log('✓ Migrated: added currency_symbol column');
+    }
+  } catch (error) {
+    console.error('迁移 currency_symbol 失败:', error);
+  }
+
   // 插入默认配置
   const configResult = db.exec('SELECT COUNT(*) as count FROM lottery_config');
   const configCount = configResult.length > 0 ? configResult[0].values[0][0] : 0;

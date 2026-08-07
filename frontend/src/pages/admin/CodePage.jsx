@@ -68,8 +68,10 @@ const CodePage = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.csv')) {
-      setMessage({ type: 'error', text: '请上传 CSV 文件' });
+    const validExt = ['.csv', '.xlsx', '.xls'];
+    const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!validExt.includes(fileExt)) {
+      setMessage({ type: 'error', text: '请上传 CSV 或 Excel（.xlsx/.xls）文件' });
       return;
     }
 
@@ -179,7 +181,7 @@ const CodePage = () => {
               {uploading ? '📤 上传中...' : '📤 批量导入'}
               <input
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 onChange={handleFileUpload}
                 disabled={uploading}
                 style={{ display: 'none' }}
@@ -230,7 +232,7 @@ const CodePage = () => {
           color: '#38BDF8',
           fontSize: '0.875rem'
         }}>
-          💡 CSV 格式：第一行为标题（code,prize_id），prize_id 对应奖项的 ID 编号
+          💡 支持 CSV / Excel（.xlsx/.xls）格式，第一行为标题（code,prize_id），prize_id 对应奖项的 ID 编号
         </div>
 
         {/* 筛选按钮 */}

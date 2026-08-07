@@ -31,6 +31,7 @@ exports.getLotteryConfig = (req, res) => {
       maxWinners: config.max_winners,
       limitReachedMessage: config.limit_reached_message,
       thanksMessage: config.thanks_message,
+      currency_symbol: config.currency_symbol || '¥',
       prizes,
       currentWinners: winnerCount
     });

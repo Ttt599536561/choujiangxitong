@@ -92,8 +92,10 @@ const UserPage = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.csv')) {
-      setMessage({ type: 'error', text: '请上传 CSV 文件' });
+    const validExt = ['.csv', '.xlsx', '.xls'];
+    const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!validExt.includes(fileExt)) {
+      setMessage({ type: 'error', text: '请上传 CSV 或 Excel（.xlsx/.xls）文件' });
       return;
     }
 
@@ -192,7 +194,7 @@ const UserPage = () => {
               {uploading ? '📤 上传中...' : '📤 批量导入'}
               <input
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 onChange={handleFileUpload}
                 disabled={uploading}
                 style={{ display: 'none' }}
@@ -243,7 +245,7 @@ const UserPage = () => {
           color: '#38BDF8',
           fontSize: '0.875rem'
         }}>
-          💡 CSV 格式：第一行为标题（email,total_recharge），之后每行一个用户数据
+          💡 支持 CSV / Excel（.xlsx/.xls）格式，第一行为标题（email,total_recharge），之后每行一个用户数据
         </div>
 
         {/* 用户列表 */}
