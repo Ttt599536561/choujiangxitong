@@ -490,23 +490,73 @@ exports.getCodes = (req, res) => {
 };
 
 /**
- * 添加兑换码
+ * 添加兑换码（单个或批量）
+ * 请求体兼容两种形式：
+ *   { code: 'ABC123', prize_id: 1 }          单个
+ *   { codes: ['ABC', 'DEF'], prize_id: 1 }   批量
+ * 已存在的兑换码会被跳过（INSERT OR IGNORE），不影响其余写入。
  */
 exports.addCode = (req, res) => {
-  const { code, prize_id } = req.body;
+  const { code, codes, prize_id } = req.body;
 
-  if (!code || !prize_id) {
-    return res.status(400).json({ error: '请提供兑换码和奖项ID' });
+  const prizeId = parseInt(prize_id, 10);
+  if (!Number.isInteger(prizeId)) {
+    return res.status(400).json({ error: '请提供有效的奖项ID' });
   }
 
-  try {
-    const result = db.prepare(`
-      INSERT INTO redemption_codes (code, prize_id)
-      VALUES (?, ?)
-    `).run(code, prize_id);
+  // 显式校验奖项存在：sql.js 的 export() 会关闭并重开连接，
+  // PRAGMA foreign_keys 在首次落盘后即失效，不能依赖外键拦截脏数据
+  const prizeExists = db.prepare('SELECT id FROM prizes WHERE id = ?').get(prizeId);
+  if (!prizeExists) {
+    return res.status(400).json({ error: '奖项不存在，请重新选择' });
+  }
 
-    res.json({ success: true, id: result.lastInsertRowid });
+  // 统一成数组：去空白、丢空值、按首次出现去重
+  const rawList = Array.isArray(codes) ? codes : [code];
+  const seen = new Set();
+  const list = [];
+  for (const item of rawList) {
+    if (item === undefined || item === null) continue;
+    const value = String(item).trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    list.push(value);
+  }
+
+  if (list.length === 0) {
+    return res.status(400).json({ error: '请提供至少一个兑换码' });
+  }
+
+  const isSingle = !Array.isArray(codes) && list.length === 1;
+
+  try {
+    const insertStmt = db.prepare(
+      'INSERT OR IGNORE INTO redemption_codes (code, prize_id) VALUES (?, ?)'
+    );
+    let imported = 0;
+    const insertMany = db.transaction((items) => {
+      for (const item of items) {
+        const result = insertStmt.run(item, prizeId);
+        if (result.changes > 0) imported++;
+      }
+    });
+    insertMany(list);
+
+    // 单个提交被忽略，说明兑换码已存在，沿用原有报错
+    if (isSingle && imported === 0) {
+      return res.status(400).json({ error: '该兑换码已存在' });
+    }
+
+    res.json({
+      success: true,
+      imported,
+      skipped: list.length - imported,
+      total: list.length
+    });
   } catch (error) {
+    if (error.message.includes('FOREIGN KEY')) {
+      return res.status(400).json({ error: '奖项不存在，请重新选择' });
+    }
     if (error.message.includes('UNIQUE')) {
       return res.status(400).json({ error: '该兑换码已存在' });
     }

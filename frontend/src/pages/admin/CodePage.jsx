@@ -11,10 +11,29 @@ const CodePage = () => {
   const [uploading, setUploading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all'); // all, pending, issued
 
+  const [submitting, setSubmitting] = useState(false);
+
   const [formData, setFormData] = useState({
-    code: '',
+    codes: '',
     prize_id: ''
   });
+
+  // 一行一个兑换码：去空白、丢空行、按首次出现去重
+  const parseCodes = (text) => {
+    const seen = new Set();
+    const list = [];
+    for (const line of String(text).split(/[\r\n]+/)) {
+      const value = line.trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      list.push(value);
+    }
+    return list;
+  };
+
+  const parsedCodes = parseCodes(formData.codes);
+  const nonEmptyLines = formData.codes.split(/[\r\n]+/).filter((l) => l.trim()).length;
+  const duplicateLines = nonEmptyLines - parsedCodes.length;
 
   useEffect(() => {
     loadData();
@@ -38,9 +57,10 @@ const CodePage = () => {
 
   const handleOpenModal = () => {
     setFormData({
-      code: '',
+      codes: '',
       prize_id: prizes.length > 0 ? prizes[0].id : ''
     });
+    setMessage({ type: '', text: '' });
     setShowModal(true);
   };
 
@@ -52,15 +72,42 @@ const CodePage = () => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
 
+    if (parsedCodes.length === 0) {
+      setMessage({ type: 'error', text: '请至少输入一个兑换码' });
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      await codeApi.addCode(formData);
-      setMessage({ type: 'success', text: '兑换码添加成功！' });
+      const response = await codeApi.addCode({
+        codes: parsedCodes,
+        prize_id: formData.prize_id
+      });
+
+      const imported = response.data?.imported ?? parsedCodes.length;
+      const skipped = response.data?.skipped ?? 0;
+
+      if (imported === 0) {
+        // 全部重复：留在弹窗内提示，方便直接修改
+        setMessage({ type: 'error', text: `兑换码已全部存在，未添加任何兑换码（${skipped} 个重复）` });
+        loadData();
+        return;
+      }
+
+      setMessage({
+        type: 'success',
+        text: skipped > 0
+          ? `成功添加 ${imported} 个兑换码，跳过 ${skipped} 个已存在的兑换码`
+          : `成功添加 ${imported} 个兑换码！`
+      });
       handleCloseModal();
       loadData();
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      setTimeout(() => setMessage({ type: '', text: '' }), 5000);
     } catch (error) {
       console.error('添加兑换码失败:', error);
       setMessage({ type: 'error', text: error.response?.data?.error || '操作失败' });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -114,6 +161,22 @@ const CodePage = () => {
     pending: codes.filter(c => c.status === 'pending').length,
     issued: codes.filter(c => c.status === 'issued').length
   };
+
+  // 提示条：弹窗关闭时显示在页面上，弹窗打开时显示在弹窗内（否则会被遮罩挡住）
+  const renderMessage = () => message.text && (
+    <div style={{
+      padding: '1rem',
+      marginBottom: '1.5rem',
+      background: message.type === 'success'
+        ? 'rgba(110, 231, 183, 0.1)'
+        : 'rgba(220, 38, 38, 0.1)',
+      border: `1px solid ${message.type === 'success' ? 'rgba(110, 231, 183, 0.3)' : 'rgba(220, 38, 38, 0.3)'}`,
+      borderRadius: '12px',
+      color: message.type === 'success' ? '#6EE7B7' : '#DC2626'
+    }}>
+      {message.text}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -207,20 +270,7 @@ const CodePage = () => {
           </div>
         </div>
 
-        {message.text && (
-          <div style={{
-            padding: '1rem',
-            marginBottom: '1.5rem',
-            background: message.type === 'success'
-              ? 'rgba(110, 231, 183, 0.1)'
-              : 'rgba(220, 38, 38, 0.1)',
-            border: `1px solid ${message.type === 'success' ? 'rgba(110, 231, 183, 0.3)' : 'rgba(220, 38, 38, 0.3)'}`,
-            borderRadius: '12px',
-            color: message.type === 'success' ? '#6EE7B7' : '#DC2626'
-          }}>
-            {message.text}
-          </div>
-        )}
+        {!showModal && renderMessage()}
 
         {/* CSV 格式说明 */}
         <div style={{
@@ -400,7 +450,7 @@ const CodePage = () => {
               background: 'linear-gradient(135deg, #161D2B 0%, #1E2636 100%)',
               borderRadius: '16px',
               padding: '2rem',
-              maxWidth: '500px',
+              maxWidth: '560px',
               width: '100%',
               border: '2px solid rgba(233, 165, 104, 0.3)'
             }}
@@ -415,8 +465,10 @@ const CodePage = () => {
                 添加兑换码
               </h2>
 
+              {renderMessage()}
+
               <form onSubmit={handleSubmit}>
-                {/* 兑换码 */}
+                {/* 兑换码（支持一行一个，批量粘贴） */}
                 <div style={{ marginBottom: '1.5rem' }}>
                   <label style={{
                     display: 'block',
@@ -426,25 +478,43 @@ const CodePage = () => {
                     marginBottom: '0.5rem'
                   }}>
                     兑换码 *
+                    <span style={{
+                      marginLeft: '0.5rem',
+                      fontWeight: '400',
+                      color: 'var(--text-secondary)'
+                    }}>
+                      一行一个，可直接粘贴多个
+                    </span>
                   </label>
-                  <input
-                    type="text"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                  <textarea
+                    value={formData.codes}
+                    onChange={(e) => setFormData({ ...formData, codes: e.target.value })}
                     required
-                    placeholder="例如：ABC123XYZ"
+                    rows={8}
+                    placeholder={'ABC123XYZ\nDEF456UVW\nGHI789RST'}
                     style={{
                       width: '100%',
                       padding: '0.875rem 1rem',
                       fontSize: '1rem',
+                      lineHeight: '1.6',
                       borderRadius: '12px',
                       border: '2px solid rgba(233, 165, 104, 0.3)',
                       background: '#0F131C',
                       color: 'var(--text-primary)',
                       outline: 'none',
-                      fontFamily: 'monospace'
+                      fontFamily: 'monospace',
+                      resize: 'vertical',
+                      minHeight: '160px'
                     }}
                   />
+                  <div style={{
+                    marginTop: '0.5rem',
+                    fontSize: '0.8125rem',
+                    color: 'var(--text-secondary)'
+                  }}>
+                    已识别 <span style={{ color: '#E9A568', fontWeight: '600' }}>{parsedCodes.length}</span> 个兑换码
+                    {duplicateLines > 0 && `（已忽略 ${duplicateLines} 个重复行）`}
+                  </div>
                 </div>
 
                 {/* 对应奖项 */}
@@ -457,6 +527,13 @@ const CodePage = () => {
                     marginBottom: '0.5rem'
                   }}>
                     对应奖项 *
+                    <span style={{
+                      marginLeft: '0.5rem',
+                      fontWeight: '400',
+                      color: 'var(--text-secondary)'
+                    }}>
+                      本次添加的兑换码都归到该奖项
+                    </span>
                   </label>
                   <select
                     value={formData.prize_id}
@@ -486,6 +563,7 @@ const CodePage = () => {
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <button
                     type="submit"
+                    disabled={submitting || parsedCodes.length === 0}
                     style={{
                       flex: 1,
                       padding: '0.875rem',
@@ -495,15 +573,21 @@ const CodePage = () => {
                       background: 'linear-gradient(135deg, #E9A568 0%, #d89558 100%)',
                       border: 'none',
                       borderRadius: '12px',
-                      cursor: 'pointer',
+                      cursor: (submitting || parsedCodes.length === 0) ? 'not-allowed' : 'pointer',
+                      opacity: (submitting || parsedCodes.length === 0) ? 0.5 : 1,
                       transition: 'all 0.3s ease'
                     }}
                   >
-                    添加
+                    {submitting
+                      ? '添加中...'
+                      : parsedCodes.length > 1
+                        ? `添加 ${parsedCodes.length} 个`
+                        : '添加'}
                   </button>
                   <button
                     type="button"
                     onClick={handleCloseModal}
+                    disabled={submitting}
                     style={{
                       flex: 1,
                       padding: '0.875rem',
@@ -513,7 +597,7 @@ const CodePage = () => {
                       background: 'rgba(148, 163, 184, 0.1)',
                       border: '1px solid rgba(148, 163, 184, 0.3)',
                       borderRadius: '12px',
-                      cursor: 'pointer',
+                      cursor: submitting ? 'not-allowed' : 'pointer',
                       transition: 'all 0.3s ease'
                     }}
                   >

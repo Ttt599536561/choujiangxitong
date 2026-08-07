@@ -15,8 +15,9 @@ async function startServer() {
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173'
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 批量粘贴兑换码时请求体可能较大，放宽默认的 100kb 限制
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // 路由
 const lotteryRoutes = require('./routes/lotteryRoutes');
