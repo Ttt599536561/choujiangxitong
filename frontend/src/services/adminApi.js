@@ -98,4 +98,12 @@ export const statsApi = {
   getStats: () => adminApi.get('/admin/stats')
 };
 
+// 花样道具管理
+export const decoyApi = {
+  getDecoys: () => adminApi.get('/admin/decoys'),
+  addDecoy: (data) => adminApi.post('/admin/decoys', data),
+  updateDecoy: (id, data) => adminApi.put(`/admin/decoys/${id}`, data),
+  deleteDecoy: (id) => adminApi.delete(`/admin/decoys/${id}`)
+};
+
 export default adminApi;

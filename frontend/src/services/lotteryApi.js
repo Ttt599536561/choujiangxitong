@@ -17,6 +17,9 @@ export const lotteryApi = {
   // 获取奖项列表
   getPrizes: () => api.get('/lottery/prizes'),
 
+  // 获取花样道具（用于老虎机动画）
+  getDecoys: () => api.get('/lottery/decoys'),
+
   // 执行抽奖
   draw: (email) => api.post('/lottery/draw', { email })
 };

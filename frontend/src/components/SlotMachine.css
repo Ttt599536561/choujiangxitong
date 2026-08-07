@@ -250,6 +250,27 @@
   }
 }
 
+/* 花样道具条目（非奖品，仅用于滚动动画增加悬念感） */
+.slot-item-decoy {
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.07) 0%, transparent 100%);
+}
+
+.slot-item-decoy .prize-name {
+  color: #38BDF8;
+}
+
+.decoy-badge {
+  font-size: 0.6rem;
+  padding: 0.125rem 0.5rem;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 999px;
+  color: #7DD3FC;
+  margin-top: 0.2rem;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}
+
 /* Toast 动画 */
 @keyframes slideDown {
   from {

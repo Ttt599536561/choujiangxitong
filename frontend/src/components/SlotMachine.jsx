@@ -33,43 +33,53 @@ const Toast = ({ message, type = 'error', onClose }) => {
   );
 };
 
-const SlotColumn = ({ prizes, isSpinning, finalPrize, columnIndex, onStopComplete, currencySymbol }) => {
+// 将奖品和花样道具交错排列，增加滚动时的悬念感
+const buildAllItems = (prizes, decoys) => {
+  if (!decoys || decoys.length === 0) return prizes;
+  const result = [];
+  const maxLen = Math.max(prizes.length, decoys.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (i < prizes.length) result.push(prizes[i]);
+    if (i < decoys.length) {
+      result.push({
+        id: `decoy-${decoys[i].id}`,
+        prize_icon: decoys[i].icon,
+        prize_name: decoys[i].label,
+        is_decoy: true
+      });
+    }
+  }
+  return result;
+};
+
+const SlotColumn = ({ items, isSpinning, finalPrize, columnIndex, onStopComplete, currencySymbol }) => {
   const [position, setPosition] = useState(0);
   const columnRef = useRef(null);
-  const itemHeight = 120; // 每个奖项的高度
+  const itemHeight = 120;
 
   useEffect(() => {
     if (!isSpinning) {
-      // 停止时，找到最终奖项的位置，让它显示在中间
-      const finalIndex = prizes.findIndex(p => p.id === finalPrize?.id);
+      // 使用第二份复制中的目标位置，避免 index=0 时的边缘问题
+      const finalIndex = items.findIndex(p => p.id === finalPrize?.id);
       if (finalIndex !== -1) {
-        // 中间位置：向上移动 (finalIndex - 1) * itemHeight，这样中奖项就在中间
-        const targetPosition = -(finalIndex - 1) * itemHeight;
+        const targetIndex = items.length + finalIndex;
+        const targetPosition = -(targetIndex - 1) * itemHeight;
         setPosition(targetPosition);
-
-        // 延迟通知停止完成
-        setTimeout(() => {
-          onStopComplete();
-        }, 500);
+        setTimeout(() => onStopComplete(), 500);
       }
     } else {
-      // 快速滚动动画
       const interval = setInterval(() => {
         setPosition(prev => {
           const newPos = prev - itemHeight;
-          // 循环滚动
-          if (Math.abs(newPos) >= prizes.length * itemHeight) {
-            return 0;
-          }
+          if (Math.abs(newPos) >= items.length * itemHeight) return 0;
           return newPos;
         });
       }, 100);
-
       return () => clearInterval(interval);
     }
-  }, [isSpinning, finalPrize, prizes, itemHeight]);
+  }, [isSpinning, finalPrize, items, itemHeight]);
 
-  const displayPrizes = [...prizes, ...prizes, ...prizes]; // 复制三份用于循环
+  const displayItems = [...items, ...items, ...items];
 
   return (
     <div className="slot-column">
@@ -81,13 +91,15 @@ const SlotColumn = ({ prizes, isSpinning, finalPrize, columnIndex, onStopComplet
           transition: isSpinning ? 'none' : 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'
         }}
       >
-        {displayPrizes.map((prize, index) => (
-          <div key={`${prize.id}-${index}`} className="slot-item">
-            <div className="prize-icon">{prize.prize_icon}</div>
-            <div className="prize-name">{prize.prize_name}</div>
-            {!prize.is_thanks && (
-              <div className="prize-amount">{currencySymbol}{prize.prize_amount}</div>
-            )}
+        {displayItems.map((item, index) => (
+          <div key={`${item.id}-${index}`} className={`slot-item${item.is_decoy ? ' slot-item-decoy' : ''}`}>
+            <div className="prize-icon">{item.prize_icon}</div>
+            <div className="prize-name">{item.prize_name}</div>
+            {item.is_decoy ? (
+              <div className="decoy-badge">限时活动</div>
+            ) : !item.is_thanks ? (
+              <div className="prize-amount">{currencySymbol}{item.prize_amount}</div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -95,19 +107,20 @@ const SlotColumn = ({ prizes, isSpinning, finalPrize, columnIndex, onStopComplet
   );
 };
 
-const SlotMachine = ({ prizes, onDrawComplete, currencySymbol = '¥' }) => {
+const SlotMachine = ({ prizes, decoys = [], onDrawComplete, currencySymbol = '¥' }) => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [email, setEmail] = useState('');
   const [toast, setToast] = useState(null);
   const [result, setResult] = useState(null);
   const [stoppedColumns, setStoppedColumns] = useState([false, false, false]);
 
+  const allItems = buildAllItems(prizes, decoys);
+
   const handleDraw = async () => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setToast({ message: '请输入有效的邮箱地址', type: 'error' });
       return;
     }
-
     setToast(null);
     setIsSpinning(true);
     setStoppedColumns([false, false, false]);
@@ -117,28 +130,22 @@ const SlotMachine = ({ prizes, onDrawComplete, currencySymbol = '¥' }) => {
       const response = await lotteryApi.draw(email);
       const prizeResult = response.data.prize;
 
-      // 找到中奖的奖项
       const winPrize = prizes.find(p => p.id === prizeResult.id);
       setResult({ ...prizeResult, prize: winPrize });
 
-      // 依次停止三列
       setTimeout(() => setStoppedColumns([true, false, false]), 1000);
       setTimeout(() => setStoppedColumns([true, true, false]), 1500);
       setTimeout(() => setStoppedColumns([true, true, true]), 2000);
-
     } catch (err) {
       setIsSpinning(false);
       setToast({ message: err.response?.data?.error || '抽奖失败，请稍后重试', type: 'error' });
     }
   };
 
-  const handleColumnStop = (columnIndex) => {
-    // 当所有列都停止时
+  const handleColumnStop = () => {
     if (stoppedColumns.every(stopped => stopped)) {
       setIsSpinning(false);
-      setTimeout(() => {
-        onDrawComplete(result);
-      }, 300);
+      setTimeout(() => onDrawComplete(result), 300);
     }
   };
 
@@ -156,11 +163,11 @@ const SlotMachine = ({ prizes, onDrawComplete, currencySymbol = '¥' }) => {
           {[0, 1, 2].map((columnIndex) => (
             <SlotColumn
               key={columnIndex}
-              prizes={prizes}
+              items={allItems}
               isSpinning={isSpinning && !stoppedColumns[columnIndex]}
               finalPrize={result?.prize}
               columnIndex={columnIndex}
-              onStopComplete={() => handleColumnStop(columnIndex)}
+              onStopComplete={handleColumnStop}
               currencySymbol={currencySymbol}
             />
           ))}
@@ -191,3 +198,4 @@ const SlotMachine = ({ prizes, onDrawComplete, currencySymbol = '¥' }) => {
 };
 
 export default SlotMachine;
+

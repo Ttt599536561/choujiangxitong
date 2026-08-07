@@ -732,3 +732,71 @@ exports.changePassword = (req, res) => {
     res.status(500).json({ error: '修改密码失败' });
   }
 };
+
+/**
+ * 获取花样道具列表（含禁用项，仅管理员）
+ */
+exports.getDecoys = (req, res) => {
+  try {
+    const decoys = db.prepare(
+      'SELECT * FROM slot_decoys ORDER BY sort_order ASC, id ASC'
+    ).all();
+    res.json(decoys);
+  } catch (error) {
+    console.error('获取花样道具失败:', error);
+    res.status(500).json({ error: '获取花样道具失败' });
+  }
+};
+
+/**
+ * 新增花样道具
+ */
+exports.addDecoy = (req, res) => {
+  const { icon, label, sort_order = 0, enabled = 1 } = req.body;
+  if (!icon || !label) {
+    return res.status(400).json({ error: '请提供图标和文字标签' });
+  }
+  try {
+    const result = db.prepare(
+      'INSERT INTO slot_decoys (icon, label, sort_order, enabled) VALUES (?, ?, ?, ?)'
+    ).run(icon.trim(), label.trim(), sort_order, enabled ? 1 : 0);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (error) {
+    console.error('新增花样道具失败:', error);
+    res.status(500).json({ error: '新增花样道具失败' });
+  }
+};
+
+/**
+ * 更新花样道具
+ */
+exports.updateDecoy = (req, res) => {
+  const { id } = req.params;
+  const { icon, label, sort_order, enabled } = req.body;
+  if (!icon || !label) {
+    return res.status(400).json({ error: '请提供图标和文字标签' });
+  }
+  try {
+    db.prepare(
+      'UPDATE slot_decoys SET icon = ?, label = ?, sort_order = ?, enabled = ? WHERE id = ?'
+    ).run(icon.trim(), label.trim(), sort_order ?? 0, enabled ? 1 : 0, id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('更新花样道具失败:', error);
+    res.status(500).json({ error: '更新花样道具失败' });
+  }
+};
+
+/**
+ * 删除花样道具
+ */
+exports.deleteDecoy = (req, res) => {
+  const { id } = req.params;
+  try {
+    db.prepare('DELETE FROM slot_decoys WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('删除花样道具失败:', error);
+    res.status(500).json({ error: '删除花样道具失败' });
+  }
+};

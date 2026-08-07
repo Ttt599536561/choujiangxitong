@@ -117,6 +117,21 @@ exports.performLottery = (req, res) => {
 };
 
 /**
+ * 获取花样道具列表（公开接口，用于前端老虎机动画）
+ */
+exports.getDecoys = (req, res) => {
+  try {
+    const decoys = db.prepare(
+      'SELECT id, icon, label, sort_order FROM slot_decoys WHERE enabled = 1 ORDER BY sort_order ASC, id ASC'
+    ).all();
+    res.json(decoys);
+  } catch (error) {
+    console.error('获取花样道具失败:', error);
+    res.status(500).json({ error: '获取花样道具失败' });
+  }
+};
+
+/**
  * 获取奖项列表（用于前端老虎机显示）
  */
 exports.getPrizes = (req, res) => {

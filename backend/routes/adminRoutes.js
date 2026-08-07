@@ -41,4 +41,10 @@ router.get('/stats', adminController.getStats);
 // 修改密码
 router.put('/change-password', adminController.changePassword);
 
+// 花样道具管理
+router.get('/decoys', adminController.getDecoys);
+router.post('/decoys', adminController.addDecoy);
+router.put('/decoys/:id', adminController.updateDecoy);
+router.delete('/decoys/:id', adminController.deleteDecoy);
+
 module.exports = router;

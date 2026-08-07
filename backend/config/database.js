@@ -144,6 +144,18 @@ async function initDatabase() {
     )
   `);
 
+  // 7. 花样道具表（抽奖动画期间混入的"诱饵"条目，增加悬念感）
+  db.run(`
+    CREATE TABLE IF NOT EXISTS slot_decoys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      icon TEXT NOT NULL DEFAULT '🎟️',
+      label TEXT NOT NULL,
+      sort_order INTEGER DEFAULT 0,
+      enabled INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // 迁移：为早于 currency_symbol 字段创建的旧库补列
   // CREATE TABLE IF NOT EXISTS 不会修改已存在的表，老库缺列会导致更新配置报错
   try {
@@ -209,6 +221,29 @@ async function initDatabase() {
       stmt.free();
     }
     console.log('✓ Default prizes created');
+  }
+
+  // 创建默认花样道具（如果没有）
+  const decoyResult = db.exec('SELECT COUNT(*) as count FROM slot_decoys');
+  const decoyCount = decoyResult.length > 0 ? decoyResult[0].values[0][0] : 0;
+
+  if (decoyCount === 0) {
+    const defaultDecoys = [
+      { icon: '🎫', label: '9.9折优惠券', sort_order: 1 },
+      { icon: '🎟️', label: '9.7折优惠券', sort_order: 2 },
+      { icon: '📅', label: '福利月卡一张', sort_order: 3 },
+      { icon: '⚡', label: '限时Team 0.05倍率', sort_order: 4 },
+      { icon: '🤔', label: '你猜？', sort_order: 5 }
+    ];
+    for (const d of defaultDecoys) {
+      const stmt = db.prepare(
+        'INSERT INTO slot_decoys (icon, label, sort_order) VALUES (?, ?, ?)'
+      );
+      stmt.bind([d.icon, d.label, d.sort_order]);
+      stmt.step();
+      stmt.free();
+    }
+    console.log('✓ Default slot decoys created');
   }
 
   // 保存数据库到文件

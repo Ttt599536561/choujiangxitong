@@ -9,6 +9,7 @@ import UserPage from './pages/admin/UserPage';
 import CodePage from './pages/admin/CodePage';
 import RecordsPage from './pages/admin/RecordsPage';
 import ChangePassword from './pages/admin/ChangePassword';
+import DecoyPage from './pages/admin/DecoyPage';
 import './index.css';
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
         <Route path="/admin/codes" element={<CodePage />} />
         <Route path="/admin/records" element={<RecordsPage />} />
         <Route path="/admin/change-password" element={<ChangePassword />} />
+        <Route path="/admin/decoys" element={<DecoyPage />} />
       </Routes>
     </Router>
   );

@@ -6,30 +6,27 @@ import { lotteryApi } from '../services/lotteryApi';
 const Home = () => {
   const [config, setConfig] = useState(null);
   const [prizes, setPrizes] = useState([]);
+  const [decoys, setDecoys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showResult, setShowResult] = useState(false);
   const [drawResult, setDrawResult] = useState(null);
 
   useEffect(() => {
-    loadConfig();
-    loadPrizes();
+    loadAll();
   }, []);
 
-  const loadConfig = async () => {
+  const loadAll = async () => {
     try {
-      const response = await lotteryApi.getConfig();
-      setConfig(response.data);
+      const [configRes, prizesRes, decoysRes] = await Promise.all([
+        lotteryApi.getConfig(),
+        lotteryApi.getPrizes(),
+        lotteryApi.getDecoys()
+      ]);
+      setConfig(configRes.data);
+      setPrizes(prizesRes.data);
+      setDecoys(decoysRes.data);
     } catch (error) {
-      console.error('加载配置失败:', error);
-    }
-  };
-
-  const loadPrizes = async () => {
-    try {
-      const response = await lotteryApi.getPrizes();
-      setPrizes(response.data);
-    } catch (error) {
-      console.error('加载奖项失败:', error);
+      console.error('加载数据失败:', error);
     } finally {
       setLoading(false);
     }
@@ -104,6 +101,7 @@ const Home = () => {
       {/* 老虎机主体 */}
       <SlotMachine
         prizes={prizes}
+        decoys={decoys}
         onDrawComplete={handleDrawComplete}
         currencySymbol={config?.currency_symbol || '¥'}
       />
