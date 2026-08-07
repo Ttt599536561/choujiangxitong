@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './SlotMachine.css';
 
 // Toast 浮层组件
@@ -52,10 +52,9 @@ const buildAllItems = (prizes, decoys) => {
   return result;
 };
 
-const SlotColumn = ({ items, isSpinning, finalPrize, columnIndex, onStopComplete, currencySymbol }) => {
-  const [position, setPosition] = useState(0);
-  const columnRef = useRef(null);
+const SlotColumn = ({ items, isSpinning, finalPrize, initialOffset = 0, onStopComplete, currencySymbol }) => {
   const itemHeight = 120;
+  const [position, setPosition] = useState(() => -(initialOffset * 120));
 
   useEffect(() => {
     if (!isSpinning) {
@@ -85,7 +84,6 @@ const SlotColumn = ({ items, isSpinning, finalPrize, columnIndex, onStopComplete
     <div className="slot-column">
       <div
         className="slot-column-inner"
-        ref={columnRef}
         style={{
           transform: `translateY(${position}px)`,
           transition: isSpinning ? 'none' : 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'
@@ -115,6 +113,13 @@ const SlotMachine = ({ prizes, decoys = [], onDrawComplete, currencySymbol = '¥
   const [stoppedColumns, setStoppedColumns] = useState([false, false, false]);
 
   const allItems = buildAllItems(prizes, decoys);
+
+  // 每列的随机起始偏移量——只在首次挂载时计算一次，保证每次刷新都不同
+  const columnOffsets = useMemo(
+    () => [0, 1, 2].map(() => allItems.length > 0 ? Math.floor(Math.random() * allItems.length) : 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [] // 空依赖：只在挂载时随机一次
+  );
 
   const handleDraw = async () => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -166,7 +171,7 @@ const SlotMachine = ({ prizes, decoys = [], onDrawComplete, currencySymbol = '¥
               items={allItems}
               isSpinning={isSpinning && !stoppedColumns[columnIndex]}
               finalPrize={result?.prize}
-              columnIndex={columnIndex}
+              initialOffset={columnOffsets[columnIndex]}
               onStopComplete={handleColumnStop}
               currencySymbol={currencySymbol}
             />
