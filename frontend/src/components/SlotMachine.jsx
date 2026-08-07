@@ -147,7 +147,7 @@ const SlotMachine = ({ prizes, onDrawComplete, currencySymbol = '¥' }) => {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="slot-machine-header">
-        <h1 className="slot-title">🎰 幸运老虎机大抽奖 🎰</h1>
+        <h1 className="slot-title">🎰 幸运大抽奖 🎰</h1>
         <p className="slot-subtitle">试试你的手气，大奖等你来拿！</p>
       </div>
 
